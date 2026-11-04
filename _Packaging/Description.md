@@ -8,6 +8,7 @@ An options window for World of Warcraft addons that explains each setting next t
 - Settings that need a reload are marked, with a reload bar
 - Search across all sections, on names or also on descriptions
 - A help pane with headings, text, terms and pictures
+- Its own translations, and safe to embed in several addons at once
 
 ## Requirements
-- Krowi_Util (KROWI_LIBMAN)
+- Krowi_Util (KROWI_LIBMAN, with AceLocale)
