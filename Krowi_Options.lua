@@ -8,21 +8,30 @@
 -- An options window that explains each feature next to its settings: sections on the left, the section's options in
 -- the middle, a help pane on the right with the section's explanation or the description of the option under the
 -- mouse. It knows nothing of the addons that use it: each one registers a tab and passes its sections, the elements of
--- a section (options that answer Get, Set, IsDisabled, ...), the help, a saved table and its strings. The window looks
--- like the game's own Options window on every client and holds one tab per registered addon
--- (docs/work/2026-10-30-options-settings-look). Lives inside Krowi_AchievementFilter for now
--- (docs/work/2026-10-25-options-revamp); extracting it is a move into Krowi_Libraries.
+-- a section (options that answer Get, Set, IsDisabled, ...), the help and a saved table. The window looks like the
+-- game's own Options window on every client and holds one tab per registered addon. Its design history is in
+-- Krowi_AchievementFilter's docs/work (2026-10-25-options-revamp, 2026-10-30-options-settings-look), where it was made;
+-- 2.0 made it a library of its own (2026-11-04-krowi-options-library).
+--
+-- Two addons can embed different versions: every file registers its own minor through LibMan, so each file comes from
+-- the newest copy that has it, and no file defines an XML template or a global besides the window's name.
 
-local lib = KROWI_LIBMAN:NewLibrary('Krowi_Options_1', 5)
+local lib = KROWI_LIBMAN:NewLibrary('Krowi_Options_2', 0, {
+    SetCurrent = true,
+    InitLocalization = true,
+})
 if not lib then return end
 
 -- The registered tabs, sorted by name, and the one window they share (lib.Frame, made on the first open). Both live on
 -- lib, which a newer copy of the library keeps.
 lib.Tabs = lib.Tabs or {}
+-- The rows' and the window's mixins (RowMixins.lua, WindowMixin.lua) and their builders (RowFrames.lua, WindowFrame.lua)
+lib.Mixins = lib.Mixins or {}
+lib.Build = lib.Build or {}
 
--- The markers an option row draws (Rows.xml) as text, so the window shows each one beside the text that explains it and
--- an addon's help can show them too (docs/work/2026-10-31-options-markers): the gold line of a changed option, the
--- reload arrow, and the undo arrow that sets a changed option back (Blizzard's, on every client)
+-- The markers an option row draws (RowFrames.lua) as text, so the window shows each one beside the text that explains
+-- it and an addon's help can show them too (docs/work/2026-10-31-options-markers): the gold line of a changed option,
+-- the reload arrow, and the undo arrow that sets a changed option back (Blizzard's, on every client)
 lib.Markup = {
     Changed = "|TInterface\\Buttons\\WHITE8X8:12:3:0:0:8:8:0:8:0:8:255:209:0|t",
     Reload = "|TInterface\\Buttons\\UI-RefreshButton:12:12|t",
@@ -46,7 +55,6 @@ lib.Markup = {
     GetHelp(id)     { Title, Blocks = { {Heading} | {Text} | {Term, Text} | {Picture, Width, Height} }, ShowMe, ShowMeNote } or nil
     ResetSection(id), ChangedCount(id)
     OnCreated(frame) called once per tab: when the window is made, or when the tab registers after that
-    Strings         see WindowMixin.lua
 ]]
 local tab = {}
 tab.__index = tab
@@ -111,10 +119,44 @@ function lib.CreateWindow(config)
     return registered
 end
 
+-- The window's texts, from the library's own locale files (Localization/), the same for every addon. Built on the first
+-- need, when every copy's phrases are loaded; ResetSection, ChangedCount and Default take string.format's %s or %d.
+local strings
+function lib.GetStrings()
+    if not strings then
+        local L = lib.L
+        strings = {
+            Overview = L["Overview"],
+            Search = L["Search"],
+            SearchAll = L["Search all tabs"],
+            SearchBroad = L["Search descriptions"],
+            SearchHelp = L["Help Search Names"],
+            SearchHelpBroad = L["Help Search Broad"],
+            SearchResults = L["Search results"],
+            NoResults = L["Nothing found."],
+            Defaults = L["Defaults"],
+            ResetSection = L["Set every option of {section} back to its default?"]:K_ReplaceVars{ section = "%s" },
+            ChangedCount = L["{count} changed"]:K_ReplaceVars{ count = "%d" },
+            ReloadText = L["Some changes take effect after a reload."],
+            ReloadNow = L["Reload now"],
+            ShowMe = L["Show me"],
+            HowItWorks = L["How it works"],
+            All = L["All"],
+            None = L["None"],
+            NotBound = L["Not bound"],
+            PressAKey = L["Press a key"],
+            Default = L["Default: {value}"]:K_ReplaceVars{ value = "%s" },
+            NeedsReload = L["Requires a reload"],
+            NotInCombat = L["Not in combat"],
+        }
+    end
+    return strings
+end
+
 -- The window, made on its first need from the place the opening addon remembers
 function lib.GetFrame(opening)
     if not lib.Frame then
-        local frame = CreateFrame("Frame", "Krowi_OptionsWindow", UIParent, "Krowi_OptionsWindowTemplate")
+        local frame = lib.Build.Window()
         frame:Init((opening or lib.Tabs[1]):GetSaved())
         lib.Frame = frame
         for _, registered in ipairs(lib.Tabs) do

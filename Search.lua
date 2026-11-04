@@ -11,7 +11,8 @@
 -- also finds a row by its description. It reads only what every tab hands the window (Groups, SectionName, GetElements)
 -- and draws nothing.
 
-local lib = KROWI_LIBMAN:GetLibrary("Krowi_Options_1")
+local sub, lib = KROWI_LIBMAN:NewSubmodule("Search", 0)
+if not sub then return end
 
 -- Grids, tab lists and cards draw as several rows; hidden options are left out. known: the kinds the window draws, nil
 -- keeps every kind.
