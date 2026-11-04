@@ -460,19 +460,16 @@ end
 
 function WindowMixin:ApplyStrings()
     local strings = self.Strings
-    self.SearchBox.Instructions:SetText(strings.Search or "")
-    self.SearchAllLabel:SetText(strings.SearchAll or "")
+    self.SearchBox.Instructions:SetText(strings.Search)
+    self.SearchAllLabel:SetText(strings.SearchAll)
     self.SearchAll:SetHitRectInsets(0, -(self.SearchAllLabel:GetStringWidth() + 4), 0, 0) -- the label ticks it too
-    -- An addon that names no broad search does not offer it on its tab
-    self.SearchBroadLabel:SetText(strings.SearchBroad or "")
+    self.SearchBroadLabel:SetText(strings.SearchBroad)
     self.SearchBroad:SetHitRectInsets(0, -(self.SearchBroadLabel:GetStringWidth() + 4), 0, 0)
-    self.SearchBroad:SetShown(strings.SearchBroad ~= nil)
-    self.SearchBroadLabel:SetShown(strings.SearchBroad ~= nil)
     -- The collapsed pane's strip: the chevron, then the pane's name down the strip; the whole strip brings the pane back.
     -- A turned text turns about its centre, so it hangs below the chevron by half its length; its letters sit off the
     -- line's middle, so it moves right to stand under the chevron (measured in game, 2026-10-30)
     local label = self.ExpandButton.Label
-    label:SetText(strings.HowItWorks or "") -- as the open pane writes it; upper() would leave non-English letters small
+    label:SetText(strings.HowItWorks) -- as the open pane writes it; upper() would leave non-English letters small
     local length = label:GetStringWidth()
     label:ClearAllPoints()
     label:SetPoint("CENTER", self.ExpandButton, "TOP", 6, -(28 + length / 2))
@@ -482,7 +479,7 @@ function WindowMixin:ApplyStrings()
     self.ReloadButton:SetText(strings.ReloadNow)
     self.ReloadText:SetText(lib.Markup.Reload .. " " .. strings.ReloadText) -- the rows' reload arrow, explained
     self.ShowMeButton:SetText(strings.ShowMe)
-    self.CancelButton:SetText(strings.No or NO)
+    self.CancelButton:SetText(NO)
 end
 
 function WindowMixin:MeasureText(text, font, width)
@@ -796,7 +793,7 @@ function WindowMixin:RefreshFooter()
         self.ChangedText:SetPoint("LEFT", self.PageTitle, "LEFT")
         self.ChangedText:SetFontObject("GameFontHighlight")
         self.ChangedText:SetText(confirming.Text)
-        self.DefaultsButton:SetText(self.Strings.Yes or YES)
+        self.DefaultsButton:SetText(YES)
         FitButton(self.DefaultsButton)
         self.DefaultsButton:SetEnabled(true)
     else
@@ -836,12 +833,26 @@ function WindowMixin:OnOptionChanged(option)
     self:RefreshHover()
 end
 
+-- Whether a row still shows an option: as its own or the one after its check box, as a grid's check box or a tab's
+local function RowShows(row, option)
+    if row.Option == option or row.With == option then return true end
+    local element = row.Element
+    if not element then return false end
+    if element.Item and element.Item.Show == option then return true end
+    for _, cell in ipairs(element.Cells or {}) do
+        if cell == option then return true end
+    end
+    return false
+end
+
 -- A change made under the mouse shows at once in the hovered row's help: its arrow's line comes or goes with it
--- (docs/work/2026-11-04-krowi-options-library). A rebuilt page may have given the row another option; then it waits for
--- the next enter.
+-- (docs/work/2026-11-04-krowi-options-library). Only that line follows the value, so the help is drawn again only when
+-- the option turns changed or back, not on every step of a slider's drag. A rebuilt page may have given the row another
+-- option; then it waits for the next enter.
 function WindowMixin:RefreshHover()
     local row, option = self.HoverRow, self.HoverRowOption
-    if not row or not row:IsVisible() or (row.Option ~= option and row.With ~= option) then return end
+    if not row or not row:IsVisible() or not RowShows(row, option) then return end
+    if (option.IsChanged and option:IsChanged() or false) == self.HoverChanged then return end
     self:HideTooltip()
     self:OnRowEnter(option, row, self.HoverControlX)
 end
@@ -908,7 +919,7 @@ end
 function WindowMixin:SearchElements(text)
     local everyTab = self.SearchEveryTab and #lib.Tabs > 1
     local list = {}
-    local broad = self.BroadSearch and self.Strings.SearchBroad ~= nil
+    local broad = self.BroadSearch
     for _, group in ipairs(lib.Search(text, everyTab, self.Tab, broad)) do
         local tab = group.Tab
         if everyTab then list[#list + 1] = { Kind = "Header", Text = tab.Config.TabName } end
@@ -945,11 +956,6 @@ function WindowMixin:OnSearch(text, scrollPosition)
     self:FillPage(scrollPosition or ScrollBoxConstants.DiscardScrollPosition, self:SearchElements(text))
     if not scrollPosition then self:ShowSearchHelp() end
     self:EndFill()
-end
-
--- The strings a row shows: the library's, also for another addon's rows in a search of every tab
-function WindowMixin:StringsFor()
-    return self.Strings
 end
 
 -- [[ The help pane, or the tooltip while the pane is collapsed ]] --
@@ -1063,6 +1069,7 @@ function WindowMixin:UpdateShowMe()
     self.ShowMeNote:SetShown(note ~= nil)
 end
 
+-- The option's description and lines, and whether it is changed (its undo arrow's line, which RefreshHover follows)
 local function OptionHelpLines(strings, option)
     local lines = {}
     local desc = option.GetDescription and option:GetDescription() or ""
@@ -1074,8 +1081,9 @@ local function OptionHelpLines(strings, option)
     end
     -- Each of the row's arrows before what it means
     if option.GetNeedsReload and option:GetNeedsReload() then lines[#lines + 1] = lib.Markup.Reload .. " " .. strings.NeedsReload end
-    if option.IsChanged and option:IsChanged() then lines[#lines + 1] = lib.Markup.Reset .. " " .. (strings.ResetToDefault or RESET_TO_DEFAULT) end
-    return desc, lines
+    local changed = option.IsChanged and option:IsChanged() or false
+    if changed then lines[#lines + 1] = lib.Markup.Reset .. " " .. RESET_TO_DEFAULT end
+    return desc, lines, changed
 end
 
 -- controlX: where the hovered control starts, from the row's left edge
@@ -1083,7 +1091,8 @@ function WindowMixin:OnRowEnter(option, row, controlX)
     if not option then return end
     self.HoverRow, self.HoverRowOption, self.HoverControlX = row, option, controlX
     local element = row and row.Element
-    local desc, lines = OptionHelpLines(self:StringsFor(element), option)
+    local desc, lines, changed = OptionHelpLines(self.Strings, option)
+    self.HoverChanged = changed
     if self.PaneCollapsed then
         local tooltip = Krowi_Tooltip -- the addon's own tooltip, never GameTooltip (Krowi_Util creates it wherever KROWI_LIBMAN exists)
         -- Above the row, from 10 before its control, where the game's Options window shows a setting's tooltip
@@ -1109,7 +1118,7 @@ function WindowMixin:OnRowEnter(option, row, controlX)
 end
 
 function WindowMixin:OnRowLeave()
-    self.HoverRow, self.HoverRowOption, self.HoverControlX = nil, nil, nil
+    self.HoverRow, self.HoverRowOption, self.HoverControlX, self.HoverChanged = nil, nil, nil, nil
     if self.PaneCollapsed then
         self:HideTooltip()
         return

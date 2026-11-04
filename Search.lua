@@ -11,7 +11,8 @@
 -- also finds a row by its description. It reads only what every tab hands the window (Groups, SectionName, GetElements)
 -- and draws nothing.
 
-local sub, lib = KROWI_LIBMAN:NewSubmodule("Search", 0)
+-- Not "Search": LibMan hangs the submodule on lib under its name, where lib.Search is the search below
+local sub, lib = KROWI_LIBMAN:NewSubmodule("SearchModule", 0)
 if not sub then return end
 
 -- Grids, tab lists and cards draw as several rows; hidden options are left out. known: the kinds the window draws, nil

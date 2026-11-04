@@ -275,7 +275,7 @@ function OptionRowMixin:Refresh()
     local option = self.Option
     if not option then return end
     local disabled = option:IsDisabled()
-    local strings = self.Window:StringsFor(self.Element)
+    local strings = self.Window.Strings
     self.Label:SetFontObject(disabled and "GameFontDisable" or "GameFontNormal")
 
     local with = self.With
@@ -409,7 +409,7 @@ function SubRowMixin:Init(element, window)
     self.Element, self.Window = element, window
     self.Text:SetText(element.Text or "")
     Place(self.All, self, lib.RowGeometry(0).Sub)
-    local strings = window:StringsFor(element)
+    local strings = window.Strings
     self.All:SetText(strings.All)
     self.None:SetText(strings.None)
 end

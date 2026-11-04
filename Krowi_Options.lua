@@ -119,6 +119,11 @@ function lib.CreateWindow(config)
     return registered
 end
 
+-- A translation's placeholder as string.format's %s or %d; a % the translator wrote stays a %
+local function Formattable(text, name, spec)
+    return (text:gsub("%%", "%%%%")):K_ReplaceVars{ [name] = spec }
+end
+
 -- The window's texts, from the library's own locale files (Localization/), the same for every addon. Built on the first
 -- need, when every copy's phrases are loaded; ResetSection, ChangedCount and Default take string.format's %s or %d.
 local strings
@@ -135,8 +140,8 @@ function lib.GetStrings()
             SearchResults = L["Search results"],
             NoResults = L["Nothing found."],
             Defaults = L["Defaults"],
-            ResetSection = L["Set every option of {section} back to its default?"]:K_ReplaceVars{ section = "%s" },
-            ChangedCount = L["{count} changed"]:K_ReplaceVars{ count = "%d" },
+            ResetSection = Formattable(L["Set every option of {section} back to its default?"], "section", "%s"),
+            ChangedCount = Formattable(L["{count} changed"], "count", "%d"),
             ReloadText = L["Some changes take effect after a reload."],
             ReloadNow = L["Reload now"],
             ShowMe = L["Show me"],
@@ -145,7 +150,7 @@ function lib.GetStrings()
             None = L["None"],
             NotBound = L["Not bound"],
             PressAKey = L["Press a key"],
-            Default = L["Default: {value}"]:K_ReplaceVars{ value = "%s" },
+            Default = Formattable(L["Default: {value}"], "value", "%s"),
             NeedsReload = L["Requires a reload"],
             NotInCombat = L["Not in combat"],
         }

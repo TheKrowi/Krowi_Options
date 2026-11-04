@@ -8,9 +8,9 @@
 local lib = KROWI_LIBMAN:GetCurrentLibrary(true)
 if not lib then return end
 
--- true: every copy of the library adds its phrases, so a newer copy's code finds its own; AceLocale keeps an English
--- text already set
-local L = lib.Localization.NewLocale('esES', true)
+-- true: every copy of the library adds its phrases, so a newer copy's code finds the ones it added; where two copies
+-- have the same phrase, the last-loaded copy's translation stays (CLAUDE.md, known debt)
+local L = lib.Localization.NewLocale("esES", true)
 if not L then return end
 
 -- [[ Everything after this line is automatically generated from CurseForge and is not meant for manual edit - SOURCETOKEN - AUTOGENTOKEN ]] --

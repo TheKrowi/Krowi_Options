@@ -11,8 +11,13 @@
 local sub, lib = KROWI_LIBMAN:NewSubmodule("WindowFrame", 0)
 if not sub then return end
 
+-- RowFrames.lua's pieces, looked up on each call: a newer copy's RowFrames.lua replaces them on lib.Build even when this
+-- file stays the older copy's
 local build = lib.Build
-local Text, Color, Finish, Row = build.Text, build.Color, build.Finish, build.Row
+local function Text(...) return build.Text(...) end
+local function Color(...) return build.Color(...) end
+local function Finish(...) return build.Finish(...) end
+local function Row(...) return build.Row(...) end
 
 -- [[ Navigation ]] --
 -- The navigation draws as the game's own Options window does (Blizzard_CategoryList.xml), from Blizzard's art only:

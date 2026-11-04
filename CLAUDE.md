@@ -26,13 +26,14 @@ Each Lua file registers its own LibStub entry through LibMan, and LibStub keeps 
 | File | LibStub entry | Registration | Minor |
 |---|---|---|---|
 | `Krowi_Options.lua` | `Krowi_Options_2` | `KROWI_LIBMAN:NewLibrary('Krowi_Options_2', 0, {...})` | 0 |
-| `Search.lua` | `Krowi_Options_2_Search` | `KROWI_LIBMAN:NewSubmodule("Search", 0)` | 0 |
+| `Search.lua` | `Krowi_Options_2_SearchModule` | `KROWI_LIBMAN:NewSubmodule("SearchModule", 0)`; not `"Search"`, because LibMan sets `lib[name]` and `lib.Search` is the search function | 0 |
 | `RowMixins.lua` | `Krowi_Options_2_RowMixins` | `KROWI_LIBMAN:NewSubmodule("RowMixins", 0)` | 0 |
 | `RowFrames.lua` | `Krowi_Options_2_RowFrames` | `KROWI_LIBMAN:NewSubmodule("RowFrames", 0)` | 0 |
 | `WindowMixin.lua` | `Krowi_Options_2_WindowMixin` | `KROWI_LIBMAN:NewSubmodule("WindowMixin", 0)` | 0 |
 | `WindowFrame.lua` | `Krowi_Options_2_WindowFrame` | `KROWI_LIBMAN:NewSubmodule("WindowFrame", 0)` | 0 |
 
-- The locale files register nothing: every copy adds its phrases (`NewDefaultLocale(true)`, `NewLocale(lang, true)`), so a newer copy's code finds its own; AceLocale keeps an English text already set.
+- **No file keeps another file's functions.** A file looks up what another file defines (`lib.Build.Finish`, `lib.Mixins.OptionRow`, `lib.Flatten`) when it calls it, never copies it into a local at load: a newer copy of that other file replaces it on `lib`, also when this file stays the older copy's. `WindowFrame.lua`'s `Text`, `Color`, `Finish` and `Row` forward to `lib.Build` for that reason.
+- The locale files register nothing: every copy adds its phrases (`NewDefaultLocale(true)`, `NewLocale(lang, true)`), so a newer copy's code finds the phrases it added. Where two copies have the same phrase, AceLocale keeps the first-loaded copy's English and the last-loaded copy's translation, whichever copy is newer (known debt below).
 - `## Version:` in the TOC is the release version and must match the top changelog entry; it is unrelated to the minors. A breaking API change needs a new major name (`Krowi_Options_3`), as 2.0 did for `Krowi_Options_1`.
 
 ## Consumers
@@ -82,3 +83,5 @@ Test through KAF. Do not deploy this repo on its own, except for the two-copy te
 - A tab without help gets an empty help pane for every section that has none, the Overview included.
 - Defaults shows, greyed, on sections without settings.
 - The window follows changes made in it, not changes made elsewhere (the game's Settings page) while it is open.
+- **A phrase two copies share is not the newest copy's** (the code review of 2.0, 2026-11-04): AceLocale keeps the first-loaded copy's English and the last-loaded copy's translation, and the locale files have no version guard. A corrected text in a newer copy shows only when that copy loads first (English) or last (other languages). Making the newest copy's text win needs a version-aware write in Krowi_Util's `LocalizationHelper`, for every Krowi library at once.
+- **"Requires a reload" is translated twice**, here and in Krowi_Util (`K_AddReloadRequired`), on two CurseForge projects. The window takes all its texts from its own project by design (2.0); a correction made on one project is copied to the other by hand.
