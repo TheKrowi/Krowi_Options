@@ -94,9 +94,9 @@ end
 
 -- The game's own Options frame (SettingsFrameTemplate: each client's border, title strip and background); Blizzard's
 -- window is laid out in Blizzard_SettingsPanel.xml, which the anchors in WindowMixin.lua's Layout follow. Hidden before
--- its children are made, so the search box does not take the keyboard.
+-- its children are made, so the search box does not take the keyboard. Named lib.WindowName (Krowi_Options.lua).
 function build.Window()
-    local frame = CreateFrame("Frame", "Krowi_OptionsWindow", UIParent, "SettingsFrameTemplate")
+    local frame = CreateFrame("Frame", lib.WindowName, UIParent, "SettingsFrameTemplate")
     frame:Hide()
     -- The width follows the help pane (WindowMixin.lua, ApplyWidth): the game's 920 plus the pane's 380
     frame:SetSize(1300, 720)
