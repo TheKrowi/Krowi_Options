@@ -49,14 +49,18 @@ Every minor stays 0 (2.0 unreleased).
 - **The deploy:** one AddOns folder per client, and the KAF session's build is in the game with a pending test request (until 11:50). No deploy without Krowi's go.
 
 ## In-game check (Krowi, 2026-11-05)
-Tonight, from a KAF worktree of this session's own, not the KAF extraction session's. The steps:
-- Start it from `feature/2026-11-04-options-strings` once that branch reads the window's name from `lib.WindowName` (the extraction session's change), so `/kaftest escape` and the `library-globals` step find the window.
-- Point `Libs/Krowi_Options` at this branch's head.
+Tonight, from a KAF worktree of this session's own, not the KAF extraction session's, and unattended (Krowi: "devise the test so it can run without my supervision"). The steps:
+- The worktree is `test-2026-11-05-options-review-fixes`, from `feature/2026-11-04-options-strings` at `f4dfdedb`, which reads the window's name from `lib.WindowName`. Its commit `6176b3f3` adds the #8 steps to the `options` suite.
+- `Libs/Krowi_Options` points at this branch's head. The pointer stays uncommitted.
 - `Deploy.ps1 -WhatIf`, then deploy to Retail and Mists. That replaces the extraction session's build in the game, so tell it first.
+- With the clients closed, KAF's `Request-GameTests.ps1 options, escape` (Retail) and `Request-GameTests.ps1 options -Client Classic` (Mists) start the clients. Krowi enters the world on Krowi's own character and nothing else. A script cannot make that click: Blizzard's terms forbid input automation.
+- The suites run on their own. A panel lists each suite's counts and its failed and skipped lines, and its screenshot is read with `Read-GameScreenshot.ps1`. The full lines reach `Read-GameTests.ps1` after the next logout or `/reload`.
+- `toggle-reset-clipped` waits 30 s for a hand on the mouse, then SKIPs. It tests the undo arrow on a half-hidden row (`2f95232`), which none of the eight fixes touches.
 
 ## Departures
 - The reproduction's #9 check now catches the name `build.Window` passes to `CreateFrame`, building the window on stand-in frames. It used to read a string literal in the source, and the name is now `lib.WindowName`. It still fails on `de2cb58`'s `Krowi_OptionsWindow`.
 - The reproduction finds Krowi_Util from a worktree too.
+- The in-game check runs unattended, so #8's hover is checked by KAF's `greyed-help` steps, not by Krowi's mouse. Hovering a greyed slider bar and input box went to the backlog (31).
 
 ## Proof
 - `<kit>\tools\lua51\lua.exe docs\work\2026-11-05-review-fixes\repro\repro.lua` prints 14 PASS lines and `every check passes`.
@@ -64,6 +68,6 @@ Tonight, from a KAF worktree of this session's own, not the KAF extraction sessi
 - `Find-DeprecatedApi.ps1` lists nothing new.
 - The taint reviewer and `/code-review` report nothing open.
 - In game, Retail and Mists:
-  - `/kaftest options` passes, and `/kaftest escape` passes on Retail.
-  - A greyed-out setting shows its help under the mouse, in the open pane and in the collapsed pane's tooltip.
-  - `Read-GameErrors.ps1` shows no new row.
+  - The requested `options` run passes, and `escape` passes on Retail. The only SKIP allowed is `toggle-reset-clipped`.
+  - `greyed-help` and `greyed-help-collapsed` pass. They are the check that a greyed-out setting shows its help under the mouse, in the open pane and in the collapsed pane's tooltip.
+  - The suite's `lua-errors` step passes. After the next logout, `Read-GameErrors.ps1` shows no new row.

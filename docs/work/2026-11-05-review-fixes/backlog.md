@@ -30,6 +30,7 @@ For the second go, after the eight findings of [spec.md](spec.md). Each item is 
 
 ## Hover
 10. Cards and the navigation's buttons still use the plain `IsMouseOver` that `2f95232` replaced for option rows (`WindowMixin.lua:48`, `CardMixin:Init` in `RowMixins.lua`). G.
+31. A greyed-out slider bar or input box may not explain itself under the mouse. Only buttons have `SetMotionScriptsWhileDisabled`, which #8 set, and whether a disabled Slider or EditBox fires `OnEnter` shows only under a real mouse. KAF's `greyed-help` steps cover the buttons. G.
 
 ## Future versions next to 2.0
 11. A file deleted or renamed in a later version comes back from an older copy. C. Needs a rule (keep a stub) and a kit check (below).

@@ -121,10 +121,11 @@ The mechanisms:
 ## Verification
 - **Test:** [repro/repro.lua](repro/repro.lua) is the reproduction and the check. It must print `every check passes`. It stays in the work folder as the start of the library-owned suite in [backlog.md](backlog.md).
 - **Checks:** the plugin's Lua 5.1 syntax hook on every edit, `Find-DeprecatedApi.ps1`, `krowi:taint-reviewer` on the diff, and `/code-review`.
-- **In game:** after the KAF session's pending Retail run and on Krowi's go. Use a KAF checkout whose `Libs/Krowi_Options` points at this branch, with KAF's `lib.WindowName` change in place.
-  - `/kaftest options` on Retail and Mists, `/kaftest escape` on Retail.
-  - #8 needs the mouse. Hover a greyed-out setting (a key binding in combat, or a setting greyed by its check box) and read its help in the open pane and in the collapsed pane's tooltip. Retail and Mists. Hover a greyed-out slider bar and input box too; if they show no help, that goes into the backlog.
-  - `Read-GameErrors.ps1` after the `/reload` shows no new error.
+- **In game:** after the KAF session's pending Retail run and on Krowi's go. Use a KAF checkout whose `Libs/Krowi_Options` points at this branch, with KAF's `lib.WindowName` change in place. It runs unattended (Krowi, 2026-11-05: "devise the test so it can run without my supervision"): KAF's `Request-GameTests.ps1` starts the client, Krowi only enters the world.
+  - `options` on Retail and Mists, `escape` on Retail.
+  - #8 is two steps of the `options` suite, `greyed-help` and `greyed-help-collapsed`. A greyed check box, dropdown, dropdown arrow and tab arrow must ask for their hover while greyed (`GetMotionScriptsWhileDisabled`), which before the fix none of them did. Their own `OnEnter`, played by the step, must make the open pane or the collapsed pane's tooltip explain the option. That the game then fires the hover is the flag's documented effect, which Blizzard's own settings check box relies on.
+  - A greyed slider bar and input box have no such flag, and only a hand on the mouse can show whether they fire their hover. That is backlog item 31, not this fix.
+  - The suite's `lua-errors` step reports the session's errors of KAF and its `Libs/` from BugGrabber.
 
 ## Decision
 - Option 1, refuse a bad config at `CreateWindow` and survive bad data at run time (Krowi, 2026-11-05).
