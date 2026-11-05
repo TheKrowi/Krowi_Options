@@ -11,6 +11,8 @@
 -- its order, mixes in the row's mixin (RowMixins.lua), sets the scripts the template named and runs OnLoad last, as XML
 -- did once the children existed. A row is built hidden, so no edit box in it takes the keyboard while it is made.
 
+-- A standalone install loaded before any Krowi addon has no KROWI_LIBMAN and nothing to serve (Krowi_Options.lua)
+if not KROWI_LIBMAN then return end
 local sub, lib = KROWI_LIBMAN:NewSubmodule("RowFrames", 0)
 if not sub then return end
 

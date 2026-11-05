@@ -10,8 +10,17 @@
 -- library's own (lib.GetStrings in Krowi_Options.lua, translated on the library's CurseForge project), the same on every
 -- tab; the game's RESET_TO_DEFAULT names the undo arrow. WindowFrame.lua builds the window and its list rows.
 
+-- A standalone install loaded before any Krowi addon has no KROWI_LIBMAN and nothing to serve (Krowi_Options.lua)
+if not KROWI_LIBMAN then return end
 local sub, lib = KROWI_LIBMAN:NewSubmodule("WindowMixin", 0)
 if not sub then return end
+
+-- A call into the addon whose tab is open: its error goes to the game's error handler and the window goes on with what
+-- it got (Krowi_Options.lua, Protected; each file that needs it has its own)
+local function Protected(func, ...)
+    local args, count = { ... }, select("#", ...)
+    return xpcall(function() return func(unpack(args, 1, count)) end, CallErrorHandler)
+end
 
 -- The navigation is as wide as the game's category list, so its header bars (199 px) end at the divider
 local navWidth, helpWidth, stripWidth = 199, 380, 30
@@ -344,18 +353,19 @@ function WindowMixin:OnLoad()
     end)
 end
 
--- The window's own state, from the saved table of the addon that opened it first; every addon keeps a copy (lib.SetShared)
-function WindowMixin:Init(saved)
-    if saved.Size then self:SetHeight(math.max(saved.Size[2], minHeight)) end -- the width follows the pane alone
-    self.PaneCollapsed = saved.PaneCollapsed and true or false
+-- The window's own state: the newest of the addons' blocks, its fields checked already (Krowi_Options.lua, ReadWindow);
+-- every addon keeps a copy (lib.SetShared)
+function WindowMixin:Init(window)
+    if window.Size then self:SetHeight(math.max(window.Size[2], minHeight)) end -- the width follows the pane alone
+    self.PaneCollapsed = window.PaneCollapsed and true or false
     self:ApplyWidth()
-    if saved.Point then
+    if window.Point then
         self:ClearAllPoints()
-        self:SetPoint(saved.Point[1], UIParent, saved.Point[2], saved.Point[3], saved.Point[4])
+        self:SetPoint(window.Point[1], UIParent, window.Point[2], window.Point[3], window.Point[4])
     end
-    self.SearchEveryTab = saved.SearchAll and true or false
+    self.SearchEveryTab = window.SearchAll and true or false
     self.SearchAll:SetChecked(self.SearchEveryTab)
-    self.BroadSearch = saved.SearchBroad and true or false
+    self.BroadSearch = window.SearchBroad and true or false
     self.SearchBroad:SetChecked(self.BroadSearch)
     self:Layout()
 end
@@ -734,14 +744,13 @@ function WindowMixin:ShowSection(id, optionId, keepSearchText)
     self.Searching = nil
     self.Confirming = nil
     if not keepSearchText and self.SearchBox:GetText() ~= "" then self.SearchBox:SetText("") end
-    config.OnSectionShown(id)
+    Protected(config.OnSectionShown, id)
     self.PageTitle:SetText(id == "overview" and self.Strings.Overview or config.SectionName(id))
     self.DefaultsButton:SetShown(id ~= "overview")
     self.Filling = true
     self:RefreshNav()
-    self:FillPage(ScrollBoxConstants.DiscardScrollPosition)
-    -- Once the page is filled: a section whose elements error is not opened again on the next open
-    self.Saved.LastSection = id
+    -- Only a page that filled is the last section: one whose elements error is not opened again on the next open
+    if self:FillPage(ScrollBoxConstants.DiscardScrollPosition) then self.Saved.LastSection = id end
     self:ShowSectionHelp()
     self:EndFill()
     if optionId then self:ScrollToOption(optionId) end
@@ -758,11 +767,31 @@ local function Signature(elements)
     return table.concat(parts, "\n")
 end
 
-function WindowMixin:FillPage(scrollPosition, elements)
-    self.Elements = elements or Flatten(self.Config.GetElements(self.SectionId))
-    self.Signature = Signature(self.Elements)
+-- The open section's rows and their signature, read from the addon: GetElements, and each option's IsHidden (Flatten)
+-- and GetLabel (Signature). nil when any of them errors; the error goes to the error handler.
+local function ReadPage(window)
+    local ok, elements, signature = Protected(function()
+        local elements = Flatten(window.Config.GetElements(window.SectionId))
+        return elements, Signature(elements)
+    end)
+    if ok then return elements, signature end
+end
+
+-- elements and signature: rows read already (the search results, a page read again after a change). Returns whether the
+-- page filled; a page whose rows could not be read shows empty.
+function WindowMixin:FillPage(scrollPosition, elements, signature)
+    if not elements then
+        elements, signature = ReadPage(self)
+    elseif not signature then
+        local ok, result = Protected(Signature, elements)
+        signature = ok and result or nil
+    end
+    local filled = elements ~= nil and signature ~= nil
+    self.Elements = filled and elements or {}
+    self.Signature = filled and signature or ""
     self.PageScrollBox:SetDataProvider(CreateDataProvider(self.Elements), scrollPosition)
     self:RefreshFooter()
+    return filled
 end
 
 -- Rebuilds the page in place, keeping the scroll position: after a change that can show or hide options
@@ -834,9 +863,17 @@ function WindowMixin:OnOptionChanged(option)
     if not self.SectionId or self.Searching and option and option.Type == "range" then
         self:Refresh()
     else
-        local elements = self.Searching and self:SearchElements(self.SearchBox:GetText()) or Flatten(self.Config.GetElements(self.SectionId))
-        if Signature(elements) ~= self.Signature then
-            self:FillPage(ScrollBoxConstants.RetainScrollPosition, elements)
+        -- Rows that could not be read keep the page as it is: its rows refresh, and the error went to the handler
+        local elements, signature
+        if self.Searching then
+            elements = self:SearchElements(self.SearchBox:GetText())
+            local ok, result = Protected(Signature, elements)
+            signature = ok and result or nil
+        else
+            elements, signature = ReadPage(self)
+        end
+        if signature and signature ~= self.Signature then
+            self:FillPage(ScrollBoxConstants.RetainScrollPosition, elements, signature)
             self:UpdateShowMe()
         else
             self:Refresh()
@@ -1001,7 +1038,8 @@ end
 
 function WindowMixin:ShowSectionHelp()
     self.HoverOption = nil
-    local help = self.Config.GetHelp(self.SectionId)
+    local ok, help = Protected(self.Config.GetHelp, self.SectionId)
+    if not ok then help = nil end -- the section's help errored: its title alone
     self.Help = help
     self:SetKicker(self.Strings.HowItWorks)
     local blocks = {}

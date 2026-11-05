@@ -16,6 +16,8 @@
 -- Two addons can embed different versions: every file registers its own minor through LibMan, so each file comes from
 -- the newest copy that has it, and no file defines an XML template or a global besides the window's name.
 
+-- A standalone install loaded before any Krowi addon has no KROWI_LIBMAN and nothing to serve: it stays silent
+if not KROWI_LIBMAN then return end
 local lib = KROWI_LIBMAN:NewLibrary('Krowi_Options_2', 0, {
     SetCurrent = true,
     InitLocalization = true,
@@ -42,23 +44,47 @@ lib.Markup = {
     Reset = "|A:common-icon-undo:12:12|a",
 }
 
---[[ config (CreateWindow refuses one that lacks a field or has it of the wrong type; only OnCreated may be left out):
+--[[ The config lib.CreateWindow(config) takes. CreateWindow refuses one that lacks a field or has it of the wrong type,
+    with an error at the addon's own line naming the tab and the field; only OnCreated may be left out.
     TabName         the tab's text: the addon's name, not translated
-    Saved           a table the addon keeps the window's place, size, pane state, search scope and breadth, its last
-                    section and the sections seen in, or a function returning it (called on the first need, so it can
-                    live in saved variables not loaded yet); the window's own state is written to every tab's table
-                    (lib.SetShared)
-    Groups          { { Name, Sections = { sectionId, ... } } } for the navigation and the search; "overview" is always
-                    first and never searched
-    SectionName(id) the navigation name of a section
+    Saved           the addon's table for the window, or a function returning it, asked until it gives a table (so the
+                    table can live in saved variables not loaded yet) and then kept for the session. The library writes
+                    two keys in it and leaves every other key to the addon:
+                      Window       the window's place, size, help pane and search ticks, which every addon shares:
+                                   { Point, Size, PaneCollapsed, SearchAll, SearchBroad, Changed }. Each change goes
+                                   into every loaded addon's table with the time() it was made, and the window opens
+                                   from the newest, so the addons agree again after one of them was off for a while
+                                   (docs/work/2026-11-05-contract-and-errors)
+                      LastSection  the section this addon's tab showed last
+    Groups          { { Name, Sections = { sectionId, ... } } } for the navigation and the search
+    SectionName(id) a section's name in the navigation, the search and the help pane's kicker
     IsNew(id)       whether the navigation marks a section New
-    Landing()       the section to open when no section is asked for
+    Landing()       the section to open when none is asked for
     OnSectionShown(id)
-    GetElements(id) the section's elements, see RowMixins.lua; { Kind = "Cards", Cards } draws its cards three to a row;
-                    the search reads them too (Search.lua)
-    GetHelp(id)     { Title, Blocks = { {Heading} | {Text} | {Term, Text} | {Picture, Width, Height} }, ShowMe, ShowMeNote } or nil
+    GetElements(id) the section's elements (RowMixins.lua's header). It runs on every change and, while searching, for
+                    every section of every searched tab on each keystroke, so it builds cheaply and changes nothing.
+    GetHelp(id)     nil, or { Title, Blocks, ShowMe, CanShowMe, ShowMeSecure, ShowMeNote }:
+                      Blocks       { { Heading } | { Text } | { Term, Text } | { Picture, Width, Height, TexCoords } }
+                      ShowMe()     shows the feature after the window closes; false when it had nothing to show,
+                                   and the window comes back
+                      CanShowMe()  false while the feature cannot be shown yet (its data still loading)
+                      ShowMeSecure(button, close)  for a feature that needs a secure button laid over Show me
+                                   (WindowMixin.lua, ReleaseShowMe); called with nil to let it go
+                      ShowMeNote   a string, or a function returning one, shown where Show me cannot be
     ResetSection(id), ChangedCount(id)
-    OnCreated(frame) called once per tab: when the window is made, or when the tab registers after that
+    OnCreated(frame) called once per tab: when the window is made, or when the tab registers after that. frame.Lightbox
+                    is the enlarged help picture, which the addon's Escape handling closes like a window.
+    "overview" opens every tab and stands in no group: GetElements, GetHelp, OnSectionShown and SectionName get it, Landing
+    may return it, and IsNew, ResetSection and ChangedCount never get it.
+    Every text an addon hands the window, here and in its elements, is a plain string, never a secret value (12.x): the
+    window compares, joins and measures them.
+    An addon's error in any of these functions goes to the game's error handler with its stack, and the window goes on
+    with what it got: a section that errors opens empty, a tab whose OnCreated errors leaves the other tabs alone.
+    Open the window after PLAYER_LOGIN: a window made while the addons still load keeps the code of the copies loaded so
+    far, and a load-on-demand addon finds the window as it was made.
+    The public surface: lib.CreateWindow; a tab's Open, Toggle, IsShown, Refresh, GetFrame and GetSaved (Unregister is for
+    tests); lib.GetStrings, lib.Markup and lib.WindowName; OnCreated's frame and its Lightbox. Everything else on lib and
+    on the window is internal and can change in any version.
 ]]
 
 -- The tabs' methods, kept on lib: an addon registers its tab while it loads, before a later addon's newer copy of this
@@ -66,6 +92,15 @@ lib.Markup = {
 lib.Mixins.Tab = lib.Mixins.Tab or {}
 local tab = lib.Mixins.Tab
 tab.__index = tab
+
+-- A call into an addon: its error goes to the game's error handler with its stack (BugSack, or the game's error frame
+-- through CallErrorHandler, as Blizzard's own xpcalls do) and the caller goes on. A closure rather than the game's
+-- xpcall(f, handler, ...): plain Lua 5.1's xpcall, which the headless tests run on, passes no arguments. Each file
+-- that needs it has its own, so no file depends on another file's version for it.
+local function Protected(func, ...)
+    local args, count = { ... }, select("#", ...)
+    return xpcall(function() return func(unpack(args, 1, count)) end, CallErrorHandler)
+end
 
 -- The addon's saved table, or nil while config.Saved gives none (a function called before its saved variables load),
 -- asked again on the next need
@@ -123,6 +158,73 @@ local function SortTabs()
     table.sort(lib.Tabs, function(a, b) return a.Config.TabName < b.Config.TabName end)
 end
 
+-- [[ The window's shared state: saved.Window in every addon's table, the newest change winning ]] --
+local function IsPoint(point)
+    return type(point) == "table" and type(point[1]) == "string" and type(point[2]) == "string" and type(point[3]) == "number"
+        and type(point[4]) == "number"
+end
+
+-- An addon's block, with each field checked: a value of the wrong type or shape (an edited file, another version) is
+-- left out, so it can never stop the window from opening
+local function ReadWindow(saved)
+    local block = type(saved) == "table" and saved.Window
+    if type(block) ~= "table" then return nil end
+    local window = { Changed = type(block.Changed) == "number" and block.Changed or nil }
+    if IsPoint(block.Point) then window.Point = { block.Point[1], block.Point[2], block.Point[3], block.Point[4] } end
+    if type(block.Size) == "table" and type(block.Size[2]) == "number" then window.Size = { tonumber(block.Size[1]) or 0, block.Size[2] } end
+    for _, flag in ipairs({ "PaneCollapsed", "SearchAll", "SearchBroad" }) do
+        if type(block[flag]) == "boolean" then window[flag] = block[flag] end
+    end
+    return window
+end
+
+local function CopyWindow(window)
+    local copy = {}
+    for key, value in next, window do
+        if type(value) == "table" then
+            local inner = {}
+            for i, v in ipairs(value) do inner[i] = v end
+            copy[key] = inner
+        else
+            copy[key] = value
+        end
+    end
+    return copy
+end
+
+-- The state the window shows: on its first need the newest block among the tabs' tables (one without a change time
+-- counts as the oldest), afterwards the one the window keeps. Kept on lib, which a newer copy of this file keeps.
+local function Shared()
+    if not lib.Shared then
+        local newest
+        for _, registered in ipairs(lib.Tabs) do
+            local window = ReadWindow(FindSaved(registered))
+            if window and (not newest or (window.Changed or 0) > (newest.Changed or 0)) then newest = window end
+        end
+        lib.Shared = newest or {}
+    end
+    return lib.Shared
+end
+
+-- Every addon's table gets its own copy, so one addon's table never holds another's
+local function WriteShared()
+    local window = Shared()
+    for _, registered in ipairs(lib.Tabs) do
+        local saved = FindSaved(registered)
+        if saved then saved.Window = CopyWindow(window) end
+    end
+end
+
+-- One of the window's settings changed: the whole block, stamped with the time, goes into every tab that has its saved
+-- table, so any one addon alone still opens the window as the player left it. A tab whose table is not there yet gets
+-- the next change.
+function lib.SetShared(key, value)
+    local window = Shared()
+    window[key] = value
+    window.Changed = time()
+    WriteShared()
+end
+
 -- What the window calls on a config: each field and the types it may have
 local configFields = {
     { "TabName", "string" }, { "Saved", "table", "function" }, { "Groups", "table" }, { "SectionName", "function" },
@@ -149,13 +251,17 @@ local function CheckConfig(config)
     end
 end
 
+-- A tab registered after the window exists takes the window's state as it stands, and its OnCreated runs at once; its
+-- error goes to the error handler and the tab stays registered
 function lib.CreateWindow(config)
     CheckConfig(config)
     local registered = setmetatable({ Config = config }, tab)
     tinsert(lib.Tabs, registered)
     SortTabs()
     if lib.Frame then
-        if config.OnCreated then config.OnCreated(lib.Frame) end
+        local saved = FindSaved(registered)
+        if saved then saved.Window = CopyWindow(Shared()) end
+        if config.OnCreated then Protected(config.OnCreated, lib.Frame) end
         lib.Frame:RefreshTabs()
     end
     return registered
@@ -200,28 +306,24 @@ function lib.GetStrings()
     return strings
 end
 
--- The window, made on its first need from the place the opening addon remembers. The saved table comes first: a tab
--- without one stops here, before a frame is made under the window's name.
+-- The window, made on its first need in the place the newest of the addons' blocks remembers. The opening tab's saved
+-- table comes first: a tab without one stops here, before a frame is made under the window's name. lib.Frame is set as
+-- soon as the frame exists, so a later error never makes a second window. The OnCreated calls run over the tabs as they
+-- were: an OnCreated that registers another tab gets that tab's OnCreated from CreateWindow, once.
 function lib.GetFrame(opening)
     if not lib.Frame then
-        local saved = (opening or lib.Tabs[1]):GetSaved()
+        (opening or lib.Tabs[1]):GetSaved()
+        local window = Shared()
         local frame = lib.Build.Window()
-        frame:Init(saved)
         lib.Frame = frame
-        for _, registered in ipairs(lib.Tabs) do
-            if registered.Config.OnCreated then registered.Config.OnCreated(frame) end
+        frame:Init(window)
+        WriteShared()
+        local tabs = {}
+        for i, registered in ipairs(lib.Tabs) do tabs[i] = registered end
+        for _, registered in ipairs(tabs) do
+            if registered.Config.OnCreated then Protected(registered.Config.OnCreated, frame) end
         end
         frame:RefreshTabs()
     end
     return lib.Frame
-end
-
--- The window's place, size, pane state and search scope are one for every addon: each addon's saved
--- table gets them, so any one addon alone still opens the window as the player left it. A tab whose saved table is not
--- there yet misses this one; its own open reports it (GetSaved).
-function lib.SetShared(key, value)
-    for _, registered in ipairs(lib.Tabs) do
-        local saved = FindSaved(registered)
-        if saved then saved[key] = value end
-    end
 end

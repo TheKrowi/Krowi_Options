@@ -42,7 +42,17 @@ Each Lua file registers its own LibStub entry through LibMan, and LibStub keeps 
 |---|---|---|
 | Krowi_AchievementFilter | 2.0 (from 105.0) | `CreateWindow` with every config field (`Options/Window/Window.lua`), `Markup` (`Options/Window/Help/Help.lua`), and in its `options` suite `Search`, `RowGeometry`, `RowX`, `CardColumns`, `CardWidth`, `CardCrop`, `WindowWidth`, `Tabs`, `WindowName` and the window's frames. |
 
-`CreateWindow` refuses a config that lacks a field or has it of the wrong type (`configFields` in `Krowi_Options.lua`; only `OnCreated` is optional), with an error naming the tab and the field. The option interface the rows read is in `RowMixins.lua`'s header.
+`CreateWindow` refuses a config that lacks a field or has it of the wrong type (`configFields` in `Krowi_Options.lua`; only `OnCreated` is optional), with an error naming the tab and the field.
+
+**The contract** is frozen from 2.0 on: it may grow, and a change to anything in it needs a new major name (`Krowi_Options_3`).
+- **Where it is written down:** the config in `Krowi_Options.lua`'s header; the element kinds and the option interface in `RowMixins.lua`'s header.
+- **Public:** `lib.CreateWindow`; a tab's `Open`, `Toggle`, `IsShown`, `Refresh`, `GetFrame` and `GetSaved` (`Unregister` is for tests); `lib.GetStrings`, `lib.Markup` and `lib.WindowName`; `OnCreated`'s frame and its `Lightbox`. Everything else on `lib` and on the window is internal. KAF's tests read internals knowingly and change with them.
+- **Saved keys:** the library writes two keys in each addon's `config.Saved` table:
+  - `Window`, the shared place, size, help pane and search ticks, with `Changed`, the `time()` of the last change. It is written whole into every loaded addon's table on each change, and the window opens from the newest (docs/work/2026-11-05-contract-and-errors).
+  - `LastSection`, per addon.
+
+  Never change the shape of a saved key; add a new one instead.
+- **An addon's errors:** a call into an addon (`OnCreated`, `OnSectionShown`, `GetElements`, an option's `IsHidden` or `GetLabel` while the page is read, `GetHelp`, each searched section) runs through a file-local `Protected`. That is `xpcall` with `CallErrorHandler`, each file with its own copy so no file depends on another's version. The error goes to the error handler, and the window goes on with what it got.
 
 ## Taint-sensitive areas
 
@@ -51,6 +61,8 @@ Run the `krowi:taint-reviewer` agent after changing any of these:
 - `build.Select` mixes Blizzard's `DropdownWithSteppersMixin` and `WowStyle2IconButtonMixin` into addon frames, and the rows use `MinimalSliderWithSteppersTemplate`, `WowStyle2DropdownTemplate`, `InputBoxTemplate` and `UIPanelButtonNoTooltipTemplate`.
 - The hover help in the collapsed pane uses `Krowi_Tooltip` (Krowi_Util's), never `GameTooltip`.
 - Escape: the consumer registers the window and its lightbox for closing (KAF in `OnCreated`).
+- The key row runs the consumer's `Slots[n]:Set(key)`. A `Set` that writes bindings (`SetBinding`, `SaveBindings`) fires `UPDATE_BINDINGS` from addon code, which runs Blizzard's binding displays tainted for the session: accepted, KAF #197 (taint review, 2026-11-05).
+- Every text a consumer hands the window must be a plain string, never a secret value: the window compares, joins and measures them.
 
 ## Localization
 
@@ -60,7 +72,7 @@ Run the `krowi:taint-reviewer` agent after changing any of these:
 ## Code style
 
 - Match the file you are editing: 4 spaces; double quotes in Lua except the `NewLibrary` call.
-- No semicolons. Each Lua file starts with the copyright block, a blank line, `---@diagnostic disable: undefined-global`, a blank line, then its registration and `if not lib then return end` (or `if not sub`).
+- No semicolons. Each Lua file starts with the copyright block, a blank line, `---@diagnostic disable: undefined-global`, a blank line, then `if not KROWI_LIBMAN then return end` (a standalone install loaded before any Krowi addon stays silent), its registration, and `if not lib then return end` (or `if not sub`).
 - CRLF on disk (LF in git, `core.autocrlf=true`), no BOM, no final newline.
 
 ## Testing in game

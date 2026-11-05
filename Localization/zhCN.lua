@@ -5,6 +5,7 @@
 
 ---@diagnostic disable: undefined-global
 
+if not KROWI_LIBMAN then return end -- a standalone install loaded before any Krowi addon (Krowi_Options.lua)
 local lib = KROWI_LIBMAN:GetCurrentLibrary(true)
 if not lib then return end
 

@@ -11,9 +11,18 @@
 -- also finds a row by its description. It reads only what every tab hands the window (Groups, SectionName, GetElements)
 -- and draws nothing.
 
+-- A standalone install loaded before any Krowi addon has no KROWI_LIBMAN and nothing to serve (Krowi_Options.lua)
+if not KROWI_LIBMAN then return end
 -- Not "Search": LibMan hangs the submodule on lib under its name, where lib.Search is the search below
 local sub, lib = KROWI_LIBMAN:NewSubmodule("SearchModule", 0)
 if not sub then return end
+
+-- A call into an addon: its error goes to the game's error handler and the search goes on (Krowi_Options.lua, Protected;
+-- each file that needs it has its own)
+local function Protected(func, ...)
+    local args, count = { ... }, select("#", ...)
+    return xpcall(function() return func(unpack(args, 1, count)) end, CallErrorHandler)
+end
 
 -- Grids, tab lists and cards draw as several rows; hidden options are left out. known: the kinds the window draws, nil
 -- keeps every kind. A section without elements (GetElements gives nil) has no rows.
@@ -245,7 +254,8 @@ end
 -- A search of the current tab, or of every tab: { { Tab, Sections = { { Id, Name, Rows } } } } in tab order, only the
 -- tabs that found something; each tab's sections by their best row. A row is a copy of its element with Tab, SectionId,
 -- Heading and HeadingAt (which of the section's headings) added, so the window can tell whose it is and what it stands
--- under. broad: descriptions too.
+-- under. broad: descriptions too. A section whose elements, names or descriptions error is left out, and the error goes
+-- to the error handler.
 function lib.Search(text, all, current, broad)
     local whole = Plain(text or ""):gsub("^%s+", ""):gsub("%s+$", "")
     if whole == "" then return {} end
@@ -258,8 +268,8 @@ function lib.Search(text, all, current, broad)
             for _, group in ipairs(registered.Config.Groups or {}) do
                 for _, id in ipairs(group.Sections) do
                     index = index + 1
-                    local section = SearchSection(registered, id, words, broad)
-                    if section then
+                    local ok, section = Protected(SearchSection, registered, id, words, broad)
+                    if ok and section then
                         section.Index = index
                         sections[#sections + 1] = section
                     end
