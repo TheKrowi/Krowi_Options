@@ -17,7 +17,11 @@ There is no build, lint or test step here: a consumer addon in the game is the t
 A second embedded copy must load without a warning and must not mix its code with the first (the two-addon spike, 2026-11-04). So:
 - **No XML templates.** `RowFrames.lua` and `WindowFrame.lua` build every frame in Lua, region by region, as `Rows.xml` and `Window.xml` declared them up to 1.0, and run `OnLoad` last. Blizzard's own templates are still inherited through `CreateFrame`, except where their `OnLoad` needs what XML gives before it: the dropdown with arrows (`DropdownWithSteppersTemplate` and its `WowStyle2IconButtonTemplate` arrows) is put together from the same pieces with Blizzard's mixins (`build.Select`).
 - **Rows hang on the lists' frames.** A list pools its frames by frame type alone when there is no template, so `InitList` (`WindowMixin.lua`) hands the view a plain frame and hangs the element kind's row on it as `frame.Row`, from a pool per kind. Code that walks a list's frames (`ForEachFrame`, KAF's tests) reads `frame.Row`.
-- **Mixins on the library.** `lib.Mixins.<Name>`, applied by the builders. The only global is the window's frame name, `lib.WindowName` (`Krowi_Options_2_Window`; 1.x's was `Krowi_OptionsWindow`).
+- **Mixins on the library.** `lib.Mixins.<Name>`, applied by the builders.
+- **The globals are the window's name and the template children Blizzard names after it.**
+  - The library's own: the window's frame name, `lib.WindowName` (`Krowi_Options_2_Window`; 1.x's was `Krowi_OptionsWindow`).
+  - Blizzard's templates add, through their `$parent` names: `Krowi_Options_2_WindowClearButton` and `…SearchIcon` (`SearchBoxTemplate`), and `…Text` (`UIPanelButtonNoTooltipTemplate`, rewritten by every such button); on Mists also `…TitleBg` (`SettingsFrameTemplate`).
+  - No other code reads them. KAF's `options` step `library-globals-window` lists them with the window built and fails on any global outside the window's name (Retail and Mists, 2026-11-05).
 
 ## Versioning
 

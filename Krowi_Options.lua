@@ -31,8 +31,9 @@ lib.Tabs = lib.Tabs or {}
 -- (RowFrames.lua, WindowFrame.lua)
 lib.Mixins = lib.Mixins or {}
 lib.Build = lib.Build or {}
--- The window's frame name, its only global, here so an addon can read it before the window is made. Not Krowi_Options
--- 1's Krowi_OptionsWindow, so an older addon's 1.x window keeps its own.
+-- The window's frame name, the library's only global (Blizzard's templates name a few children after it, CLAUDE.md),
+-- here so an addon can read it before the window is made. Not Krowi_Options 1's Krowi_OptionsWindow, so an older
+-- addon's 1.x window keeps its own.
 lib.WindowName = "Krowi_Options_2_Window"
 
 -- The markers an option row draws (RowFrames.lua) as text, so the window shows each one beside the text that explains
