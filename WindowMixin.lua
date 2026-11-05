@@ -963,9 +963,10 @@ function WindowMixin:OnDefaultsClick()
     self:AskConfirm(self.Strings.ResetSection:format(tostring(Ask(id, self.Config.SectionName, id))), function() self:ResetSection(id) end)
 end
 
--- Config.ResetSection returns true when an option it set back needs a reload; the page is drawn again also when it errored
+-- Config.ResetSection returns true when an option it set back needs a reload. One that errored may have set back such
+-- an option before it failed, so the reload bar shows; the page is drawn again either way.
 function WindowMixin:ResetSection(id)
-    if Ask(false, self.Config.ResetSection, id) then self.ReloadPending = true end
+    if Ask(true, self.Config.ResetSection, id) then self.ReloadPending = true end
     self:ReloadSection()
 end
 
@@ -1107,11 +1108,14 @@ function WindowMixin:UpdateShowMe()
     local note
     local showButton = visible and true or false
     if secure then
-        showButton = Ask(false, help.ShowMeSecure, self.ShowMeButton, function() self:Hide() end) ~= false -- an error lays no button
-        self.SecureHelp = showButton and help or nil
+        local ok, laid = Protected(help.ShowMeSecure, self.ShowMeButton, function() self:Hide() end)
+        showButton = ok and laid ~= false
+        -- One that errored may have laid its button before it failed, so it is let go like one that laid it
+        self.SecureHelp = (showButton or not ok) and help or nil
     end
     if visible and not showButton and help.ShowMeNote then
-        note = type(help.ShowMeNote) == "function" and Ask(nil, help.ShowMeNote) or help.ShowMeNote
+        if type(help.ShowMeNote) == "function" then note = Ask(nil, help.ShowMeNote) else note = help.ShowMeNote end
+        if type(note) ~= "string" then note = nil end -- an error, or no text: no note
     end
     local inCombat = self:InCombat()
     if showButton and inCombat then note = self.Strings.NotInCombat end

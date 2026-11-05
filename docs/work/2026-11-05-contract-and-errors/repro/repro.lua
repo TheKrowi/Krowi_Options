@@ -460,5 +460,54 @@ Check("16h", "a tab whose Landing errors opens on the overview", function()
     return ok and shown == "overview", ok and ("opened on " .. tostring(shown)) or ("raised: " .. tostring(message))
 end)
 
+-- [[ From the code review of the review fixes (2026-11-05) ]] --
+-- The Show me part of the help pane, on stand-ins that record what is set
+local function ShowMeWindow(lib, help)
+    local note = { Text = nil }
+    return Window(lib, {
+        Help = help, PaneCollapsed = false, InCombat = function() return false end,
+        ShowMeButton = { SetShown = Noop, SetEnabled = Noop },
+        ShowMeNote = { ClearAllPoints = Noop, SetPoint = Noop, SetShown = Noop, SetText = function(_, text) note.Text = text end },
+        HelpBackground = {}, UpdateShowMe = lib.Mixins.Window.UpdateShowMe, ReleaseShowMe = lib.Mixins.Window.ReleaseShowMe,
+    }), note
+end
+
+Check("16i", "a ShowMeNote function that errors leaves no note and no error of the window's own", function()
+    local lib = LoadCopy()
+    local window, note = ShowMeWindow(lib, { ShowMeSecure = function() return false end, ShowMeNote = function() error("ShowMeNote's own error") end })
+    local ok, message = pcall(window.UpdateShowMe, window)
+    return ok and note.Text == "" and #handled == 1, ("%s, note %s, %d error(s) to the handler"):format(ok and "drawn" or ("raised: " .. tostring(message)),
+        tostring(note.Text), #handled)
+end)
+
+Check("16j", "a ShowMeSecure that errors is still let go when its section's help goes", function()
+    local lib = LoadCopy()
+    local released = false
+    local help = { ShowMeSecure = function(button) if button == nil then released = true return end error("ShowMeSecure's own error") end }
+    local window = ShowMeWindow(lib, help)
+    window:UpdateShowMe()
+    window.Help = nil
+    local ok, message = pcall(window.UpdateShowMe, window)
+    return ok and released, ok and (released and "let go" or "left laid") or ("raised: " .. tostring(message))
+end)
+
+Check("13f", "another tab whose Saved errors is reported once, not on every change", function()
+    local lib = LoadCopy()
+    StandInWindows(lib)
+    local opening = lib.CreateWindow(Config({ TabName = "A" }))
+    lib.CreateWindow(Config({ TabName = "B", Saved = function() error("B's own Saved error") end }))
+    lib.GetFrame(opening)
+    for i = 1, 3 do lib.SetShared("PaneCollapsed", i % 2 == 0) end
+    return #handled == 1, ("%d error(s) to the handler over the open and three changes"):format(#handled)
+end)
+
+Check("16k", "a ResetSection that errors shows the reload bar, since a setting it reset may need one", function()
+    local lib = LoadCopy()
+    local window = SectionWindow(lib, Config({ ResetSection = function() error("ResetSection's own error") end }))
+    window.ReloadSection = Noop
+    local ok, message = pcall(window.ResetSection, window, "first")
+    return ok and window.ReloadPending == true, ok and ("ReloadPending = " .. tostring(window.ReloadPending)) or ("raised: " .. tostring(message))
+end)
+
 print(failed == 0 and "every check passes" or ("%d check(s) fail"):format(failed))
 if failed > 0 then os.exit(1) end

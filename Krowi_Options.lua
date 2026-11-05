@@ -121,10 +121,12 @@ function tab:GetSaved()
     return FindSaved(self) or error(("Krowi_Options: tab %q: config.Saved gave no table"):format(tostring(self.Config.TabName)), 2)
 end
 
--- Another addon's saved table, asked for the shared state: an addon whose Saved errors is left out and its error goes to
--- the error handler, so it never stops the window of the others
+-- Another addon's saved table, asked for the shared state: an addon whose Saved errors is left out, its error goes to the
+-- error handler once, and it is not asked again this session, so it never stops the window of the others
 local function OtherSaved(registered)
+    if registered.SavedFailed then return nil end
     local ok, saved = Protected(FindSaved, registered)
+    if not ok then registered.SavedFailed = true end
     return ok and saved or nil
 end
 
