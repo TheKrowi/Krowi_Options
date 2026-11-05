@@ -48,6 +48,10 @@ Every minor stays 0 (2.0 unreleased).
 - **KAF's tests read `Krowi_OptionsWindow`:** they fail on this branch until the KAF session switches them to `lib.WindowName`. The in-game run waits for that.
 - **The deploy:** one AddOns folder per client, and the KAF session's build is in the game with a pending test request (until 11:50). No deploy without Krowi's go.
 
+## Departures
+- The reproduction's #9 check now catches the name `build.Window` passes to `CreateFrame`, building the window on stand-in frames. It used to read a string literal in the source, and the name is now `lib.WindowName`. It still fails on `de2cb58`'s `Krowi_OptionsWindow`.
+- The reproduction finds Krowi_Util from a worktree too.
+
 ## Proof
 - `<kit>\tools\lua51\lua.exe docs\work\2026-11-05-review-fixes\repro\repro.lua` prints 14 PASS lines and `every check passes`.
 - The plugin's syntax hook raises nothing.

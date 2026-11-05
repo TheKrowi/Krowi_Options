@@ -441,10 +441,11 @@ end
 -- Shows the window on an addon's tab: its sections, strings and saved table, at sectionId or the addon's landing section
 function WindowMixin:ShowTab(tab, sectionId, optionId)
     if self.Tab ~= tab then
+        local saved = tab:GetSaved() -- first: a tab without a saved table errors with the window left as it was
         self:EndKeyCaptures()
         self:ReleaseShowMe()
         self.Tab = tab
-        self.Config, self.Strings, self.Saved = tab.Config, lib.GetStrings(), tab:GetSaved()
+        self.Config, self.Strings, self.Saved = tab.Config, lib.GetStrings(), saved
         self.SectionId, self.Help, self.Searching, self.Confirming = nil, nil, nil, nil
         self:ApplyStrings()
         self:RefreshTabs()
@@ -670,9 +671,11 @@ function WindowMixin:OnEvent(event)
         self:UpdateShowMe()
         return
     end
+    -- The flag holds for this refresh only, also when an option errors in it; a key row's error while its capture ends
+    -- still lets the page refresh into combat
     self.CombatStarting = event == "PLAYER_REGEN_DISABLED"
-    if self.CombatStarting then self:EndKeyCaptures() end
-    self:Refresh()
+    if self.CombatStarting then xpcall(function() self:EndKeyCaptures() end, CallErrorHandler) end
+    xpcall(function() self:Refresh() end, CallErrorHandler)
     self.CombatStarting = nil
 end
 
@@ -730,7 +733,6 @@ function WindowMixin:ShowSection(id, optionId, keepSearchText)
     self.SectionId = id
     self.Searching = nil
     self.Confirming = nil
-    self.Saved.LastSection = id
     if not keepSearchText and self.SearchBox:GetText() ~= "" then self.SearchBox:SetText("") end
     config.OnSectionShown(id)
     self.PageTitle:SetText(id == "overview" and self.Strings.Overview or config.SectionName(id))
@@ -738,6 +740,8 @@ function WindowMixin:ShowSection(id, optionId, keepSearchText)
     self.Filling = true
     self:RefreshNav()
     self:FillPage(ScrollBoxConstants.DiscardScrollPosition)
+    -- Once the page is filled: a section whose elements error is not opened again on the next open
+    self.Saved.LastSection = id
     self:ShowSectionHelp()
     self:EndFill()
     if optionId then self:ScrollToOption(optionId) end
@@ -748,7 +752,7 @@ local function Signature(elements)
     local parts = {}
     for i, element in ipairs(elements) do
         local option = element.Option or (element.Item and element.Item.Show)
-        local with = element.With and not element.With:IsHidden() and ("+" .. element.With.Id) or "" -- shown with its row
+        local with = element.With and not element.With:IsHidden() and ("+" .. (element.With.Id or "")) or "" -- shown with its row
         parts[i] = element.Kind .. ":" .. (option and ((option.Id or "") .. "|" .. option:GetLabel() .. with) or tostring(element.Key or element.Text or element.Label or ""))
     end
     return table.concat(parts, "\n")
@@ -771,12 +775,20 @@ function WindowMixin:ReloadSection()
     self:FillPage(ScrollBoxConstants.RetainScrollPosition)
 end
 
+-- A row whose option errors stops only itself: the error goes to the game's error handler with its stack (BugSack, or
+-- the game's error frame through CallErrorHandler, as Blizzard's own xpcalls do), and the other rows, the changed count
+-- and the reload bar still refresh. A closure rather than the game's xpcall(f, handler, ...): plain Lua 5.1's xpcall,
+-- which the headless tests run on, passes no arguments.
+local function RefreshRow(frame)
+    local row = frame.Row
+    if row and row.Refresh then
+        xpcall(function() row:Refresh() end, CallErrorHandler)
+    end
+end
+
 function WindowMixin:Refresh()
     if not self:IsShown() then return end
-    self.PageScrollBox:ForEachFrame(function(frame)
-        local row = frame.Row
-        if row and row.Refresh then row:Refresh() end
-    end)
+    self.PageScrollBox:ForEachFrame(RefreshRow)
     self:RefreshFooter()
     self:UpdateShowMe()
 end

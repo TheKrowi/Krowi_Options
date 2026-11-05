@@ -65,9 +65,11 @@ build.Row = Row
 
 -- [[ Controls ]] --
 
--- The minimal check box of Blizzard's own settings (Blizzard_SettingControls.xml)
+-- The minimal check box of Blizzard's own settings (Blizzard_SettingControls.xml), which fires its hover while greyed out
+-- too (motionScriptsWhileDisabled), so the help still says what a disabled option is
 function build.CheckButton(parent)
     local button = CreateFrame("CheckButton", nil, parent)
+    button:SetMotionScriptsWhileDisabled(true)
     button:SetSize(30, 29)
     button:SetNormalTexture(StateAtlas(button, "checkbox-minimal"))
     button:SetPushedTexture(StateAtlas(button, "checkbox-minimal"))

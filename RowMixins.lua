@@ -6,14 +6,20 @@
 ---@diagnostic disable: undefined-global
 
 -- The rows of the options page. An element (see WindowMixin.lua) picks its row; an option row reads the option's
--- interface: GetLabel, GetDescription, Type, Get, Set, IsDisabled, GetValues, GetRange, GetButtonText,
--- GetNeedsReload, IsChanged, Reset, Placeholder, Confirm (a select's question before a choice is made), for a key row
--- Slots (two options holding a key each), and optionally GetParent (the option it hangs under, which the search finds
--- with it). A toggle's element may carry With, an execute or range option drawn 5
--- after the check box as a 200 button or a 214 slider, as the game's check box with a button or a slider
--- (Blizzard_SettingControls.lua, SettingsCheckboxWithButtonControlMixin and SettingsCheckboxSliderControlMixin); the
--- row's name and changed line are the toggle's and With's together. A slider explains itself under the mouse; a button
--- is the check box's, whose name says what it does (Krowi, docs/work/2026-11-02-options-widths).
+-- interface:
+--   every option  Type ("toggle", "range", "select", "execute", "input" or "key"), GetLabel, IsHidden, IsDisabled, Get,
+--                 Set (an execute option's runs it), IsChanged, Reset, GetNeedsReload
+--   per type      range: GetRange (min, max, step), optionally Format(value); select: GetValues ({ { value, text } }),
+--                 optionally Placeholder and Confirm(value) (the question asked before a choice is made); execute:
+--                 GetButtonText; key: Slots (two options holding a key each)
+--   optionally    GetDescription, GetDefault (returning whether it has one, and the value) with FormatValue(value),
+--                 GetParent (the option it hangs under, which the search finds with it), Indent, Id (ScrollToOption)
+-- A grid's check boxes and a tab list's Show are options too. A toggle's element may carry With, an execute or range
+-- option with the same interface, drawn 5 after the check box as a 200 button or a 214 slider, as the game's check box
+-- with a button or a slider (Blizzard_SettingControls.lua, SettingsCheckboxWithButtonControlMixin and
+-- SettingsCheckboxSliderControlMixin); the row's name and changed line are the toggle's and With's together. A slider
+-- explains itself under the mouse; a button is the check box's, whose name says what it does (Krowi,
+-- docs/work/2026-11-02-options-widths).
 -- Every change goes through window:OnOptionChanged, which redraws the rows, their changed lines and the reload bar.
 -- RowFrames.lua builds each row and applies its mixin, kept on lib.Mixins rather than as a global, so the newest copy of
 -- the library decides.
@@ -101,7 +107,15 @@ end
 local OptionRowMixin = {}
 lib.Mixins.OptionRow = OptionRowMixin
 
+-- A control under the mouse fires its OnEnter while greyed out too, as the game's own settings check box does
+-- (SettingsCheckboxTemplate's motionScriptsWhileDisabled, Blizzard_SettingControls.xml), so the help still says what a
+-- disabled option is. Only buttons have the setting, not a slider or an edit box.
+local function HoverWhileDisabled(control)
+    if control.SetMotionScriptsWhileDisabled then control:SetMotionScriptsWhileDisabled(true) end
+end
+
 local function Forward(control, row)
+    HoverWhileDisabled(control)
     control:HookScript("OnEnter", function() row:OnEnter(control) end)
     control:HookScript("OnLeave", function() row:OnLeave() end)
 end
@@ -505,6 +519,7 @@ function TabRowMixin:OnLoad()
         self.Window:ReloadSection()
     end)
     for _, control in ipairs({ self.ShowCheck, self.Up, self.Down }) do
+        HoverWhileDisabled(control)
         control:HookScript("OnEnter", function() self:OnEnter() end)
         control:HookScript("OnLeave", function() self:OnLeave() end)
     end

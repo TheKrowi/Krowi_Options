@@ -3,10 +3,22 @@
 -- before the fix every check but #3 (fixed in de2cb58) FAILs. #8 is checked in game too: only the client shows whether
 -- a greyed-out control fires its hover.
 --
--- From the repo root: <Krowi_ClaudeKit>\tools\lua51\lua.exe docs\work\2026-11-05-review-fixes\repro\repro.lua
+-- From the repo root or a worktree's: <Krowi_ClaudeKit>\tools\lua51\lua.exe docs\work\2026-11-05-review-fixes\repro\repro.lua
+
+---@diagnostic disable: undefined-global
 
 local root = ((arg and arg[0]) or ""):gsub("\\", "/"):match("^(.-)docs/work/") or ""
-local UTIL = root .. "../Krowi_Util/"
+-- Krowi_Util beside the library's main checkout, seen from it or from a worktree under its .claude/worktrees/
+local UTIL
+for _, up in ipairs({ "../", "../../../../" }) do
+    local file = io.open(root .. up .. "Krowi_Util/Libs/LibStub.lua", "rb")
+    if file then
+        file:close()
+        UTIL = root .. up .. "Krowi_Util/"
+        break
+    end
+end
+assert(UTIL, "Krowi_Util not found beside the library")
 
 local function Read(path)
     local file = assert(io.open(path, "rb"))
@@ -47,6 +59,7 @@ local function Fresh()
     handled = {}
     GetLocale = function() return "enUS" end
     geterrorhandler = function() return function(message) handled[#handled + 1] = message end end
+    CallErrorHandler = function(...) return geterrorhandler()(...) end -- Blizzard_SharedXMLBase/ErrorUtil.lua
     tinsert, tremove = table.insert, table.remove
     GetBuildInfo = function() return "12.1.5", "1", "", 120105 end
     WOW_PROJECT_ID, WOW_PROJECT_MAINLINE = 1, 1
@@ -311,9 +324,18 @@ Check("8", "a greyed-out control still passes the mouse to its row", function()
     return #missing == 0, #missing == 0 and "every control" or ("not on " .. table.concat(missing, ", "))
 end)
 
-Check("9", "the window's global name is not Krowi_Options 1's", function()
-    local name = Read(root .. "WindowFrame.lua"):match('CreateFrame%("Frame", "([%w_]+)", UIParent, "SettingsFrameTemplate"%)')
-    return name ~= nil and name ~= "Krowi_OptionsWindow", "name = " .. tostring(name)
+Check("9", "the window's global name is not Krowi_Options 1's, and lib.WindowName says it", function()
+    local lib = LoadCopy()
+    RecordFrames()
+    local named
+    CreateFrame = function(_, name, _, template)
+        if template == "SettingsFrameTemplate" then named = name end
+        return Recorder()
+    end
+    lib.Build.Finish = function(frame) return frame end -- the window's OnLoad needs a real frame
+    lib.Build.Window()
+    return named ~= nil and named ~= "Krowi_OptionsWindow" and named == lib.WindowName,
+        ("named %s, lib.WindowName %s"):format(tostring(named), tostring(lib.WindowName))
 end)
 
 print(failed == 0 and "every check passes" or ("%d check(s) fail"):format(failed))

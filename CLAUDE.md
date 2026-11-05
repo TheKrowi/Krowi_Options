@@ -17,7 +17,7 @@ There is no build, lint or test step here: a consumer addon in the game is the t
 A second embedded copy must load without a warning and must not mix its code with the first (the two-addon spike, 2026-11-04). So:
 - **No XML templates.** `RowFrames.lua` and `WindowFrame.lua` build every frame in Lua, region by region, as `Rows.xml` and `Window.xml` declared them up to 1.0, and run `OnLoad` last. Blizzard's own templates are still inherited through `CreateFrame`, except where their `OnLoad` needs what XML gives before it: the dropdown with arrows (`DropdownWithSteppersTemplate` and its `WowStyle2IconButtonTemplate` arrows) is put together from the same pieces with Blizzard's mixins (`build.Select`).
 - **Rows hang on the lists' frames.** A list pools its frames by frame type alone when there is no template, so `InitList` (`WindowMixin.lua`) hands the view a plain frame and hangs the element kind's row on it as `frame.Row`, from a pool per kind. Code that walks a list's frames (`ForEachFrame`, KAF's tests) reads `frame.Row`.
-- **Mixins on the library.** `lib.Mixins.<Name>`, applied by the builders. The only global is the window's frame name, `Krowi_OptionsWindow`.
+- **Mixins on the library.** `lib.Mixins.<Name>`, applied by the builders. The only global is the window's frame name, `lib.WindowName` (`Krowi_Options_2_Window`; 1.x's was `Krowi_OptionsWindow`).
 
 ## Versioning
 
@@ -32,7 +32,7 @@ Each Lua file registers its own LibStub entry through LibMan, and LibStub keeps 
 | `WindowMixin.lua` | `Krowi_Options_2_WindowMixin` | `KROWI_LIBMAN:NewSubmodule("WindowMixin", 0)` | 0 |
 | `WindowFrame.lua` | `Krowi_Options_2_WindowFrame` | `KROWI_LIBMAN:NewSubmodule("WindowFrame", 0)` | 0 |
 
-- **No file keeps another file's functions.** A file looks up what another file defines (`lib.Build.Finish`, `lib.Mixins.OptionRow`, `lib.Flatten`) when it calls it, never copies it into a local at load: a newer copy of that other file replaces it on `lib`, also when this file stays the older copy's. `WindowFrame.lua`'s `Text`, `Color`, `Finish` and `Row` forward to `lib.Build` for that reason.
+- **No file keeps another file's functions.** A file looks up what another file defines (`lib.Build.Finish`, `lib.Mixins.OptionRow`, `lib.Flatten`) when it calls it, never copies it into a local at load: a newer copy of that other file replaces it on `lib`, also when this file stays the older copy's. `WindowFrame.lua`'s `Text`, `Color`, `Finish` and `Row` forward to `lib.Build` for that reason. The same holds for what an addon gets while it loads: a tab's metatable is `lib.Mixins.Tab`, so a newer copy's tab methods reach a tab an older copy made.
 - The locale files register nothing: every copy adds its phrases (`NewDefaultLocale(true)`, `NewLocale(lang, true)`), so a newer copy's code finds the phrases it added. Where two copies have the same phrase, AceLocale keeps the first-loaded copy's English and the last-loaded copy's translation, whichever copy is newer (known debt below).
 - `## Version:` in the TOC is the release version and must match the top changelog entry; it is unrelated to the minors. A breaking API change needs a new major name (`Krowi_Options_3`), as 2.0 did for `Krowi_Options_1`.
 
@@ -40,7 +40,9 @@ Each Lua file registers its own LibStub entry through LibMan, and LibStub keeps 
 
 | Consumer | Pinned | Uses |
 |---|---|---|
-| Krowi_AchievementFilter | 2.0 (from 105.0) | `CreateWindow` with every config field (`Options/Window/Window.lua`), `Markup` (`Options/Window/Help/Help.lua`), and in its `options` suite `Search`, `RowGeometry`, `RowX`, `CardColumns`, `CardWidth`, `CardCrop`, `WindowWidth`, `Tabs` and the window's frames. |
+| Krowi_AchievementFilter | 2.0 (from 105.0) | `CreateWindow` with every config field (`Options/Window/Window.lua`), `Markup` (`Options/Window/Help/Help.lua`), and in its `options` suite `Search`, `RowGeometry`, `RowX`, `CardColumns`, `CardWidth`, `CardCrop`, `WindowWidth`, `Tabs`, `WindowName` and the window's frames. |
+
+`CreateWindow` refuses a config that lacks a field or has it of the wrong type (`configFields` in `Krowi_Options.lua`; only `OnCreated` is optional), with an error naming the tab and the field. The option interface the rows read is in `RowMixins.lua`'s header.
 
 ## Taint-sensitive areas
 

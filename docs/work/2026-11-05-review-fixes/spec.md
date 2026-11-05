@@ -79,7 +79,7 @@ The mechanisms:
     - Must be functions: `SectionName`, `IsNew`, `Landing`, `OnSectionShown`, `GetElements`, `GetHelp`, `ResetSection`, `ChangedCount`.
     - `TabName` a string; `Saved` a table or function; `Groups` a table of tables with a `Sections` table; `OnCreated` a function when given.
     - The error is raised at level 3, the consumer's call, before the tab is added.
-- **#5** `WindowMixin.lua`'s local `Flatten` takes `elements or {}`, which covers `FillPage` and `OnOptionChanged`. `ShowSection` saves `LastSection` after `FillPage`.
+- **#5** `lib.Flatten` (`Search.lua`) takes nil as no elements, which covers every caller: `FillPage`, `OnOptionChanged` and the search. `ShowSection` saves `LastSection` after `FillPage`.
 - **#6**
   - Rewrite the header's interface, so an author knows which methods and fields are needed.
   - Every option: `GetLabel`, `IsHidden`, `IsDisabled`, `Get`, `Set`, `IsChanged`, `Reset`, `GetNeedsReload`, `Type`.
@@ -88,12 +88,12 @@ The mechanisms:
   - With: an execute or range option with the same interface.
   - The signature reads `(element.With.Id or "")`.
 - **#7**
-  - `Refresh` runs each row through a local `RefreshRow(frame)`, which calls `row:Refresh()` in `xpcall(..., geterrorhandler())`, so BugGrabber gets the error with its stack and the loop goes on.
-  - `OnEvent` runs `EndKeyCaptures` and `Refresh` in one `xpcall`, then clears the flag.
-  - A closure per call, because Lua 5.1's `xpcall` passes no arguments.
+  - `Refresh` runs each row through a local `RefreshRow(frame)`, which calls `row:Refresh()` in `xpcall(..., CallErrorHandler)`. BugGrabber, or the game's error frame at the right stack level, gets the error, and the loop goes on. `CallErrorHandler` is Blizzard's own (`Blizzard_SharedXMLBase/ErrorUtil.lua`, the same on live, classic and classic_titan), as Blizzard's xpcalls use it (the taint reviewer's advice).
+  - `OnEvent` runs `EndKeyCaptures` and `Refresh` each in its own `xpcall`, then clears the flag. A key row's error while its capture ends then still lets the page refresh into combat.
+  - A closure per call: the game's `xpcall` passes arguments (`FunctionUtil.lua:4`), but plain Lua 5.1's, which the headless tests run on, does not.
 - **#8**
   - `build.CheckButton` calls `SetMotionScriptsWhileDisabled(true)`, as `SettingsCheckboxTemplate` does. This covers the toggle, the grid's cells, the tab row's check box and the window's two search check boxes.
-  - `Forward`, and the tab row's loop for its arrows, call it on each control that has the method. Buttons, the dropdown button and the steppers have it; the slider frame and the edit box have none and need none for this.
+  - `Forward`, and the tab row's loop for its arrows, call it on each control that has the method. Buttons, the dropdown button and the steppers have it. The slider bar and the edit box have no such setting (`SimpleButtonAPIDocumentation.lua` alone lists it), so whether they fire their hover while greyed out is checked in game.
   - Blizzard's `WowStyle2IconButtonMixin` reads `IsEnabled()` for its art (`MenuTemplates.lua:1166-1186`), so a disabled arrow under the mouse keeps its disabled look.
 - **#9**
   - `Krowi_Options.lua` sets `lib.WindowName = "Krowi_Options_2_Window"`, and `build.Window` reads it at the call.
@@ -109,7 +109,7 @@ The mechanisms:
 
 ## Areas of concern
 - **Taint and secret values:** no Blizzard frame, global or function is touched or hooked. `SetMotionScriptsWhileDisabled` is set on frames the library creates, some of them made from Blizzard templates (the slider's steppers, `WowStyle2DropdownTemplate`'s button). `xpcall` with `geterrorhandler()` is plain addon code. Run `krowi:taint-reviewer` on the diff.
-- **Clients:** `SetMotionScriptsWhileDisabled` is in `SimpleButtonAPIDocumentation.lua` on live and classic (Mists). Titan Reforged has no local install or source branch here, so it is unverified there; `Forward`'s method check keeps it from erroring.
+- **Clients:** `SetMotionScriptsWhileDisabled` is in `SimpleButtonAPIDocumentation.lua` on live, classic (Mists) and classic_titan. Titan Reforged has no local install, so it is not checked in game there. `Find-DeprecatedApi.ps1` finds no use of a removed or deprecated global on any of the seven clones.
 - **Blizzard API changes:** none used beyond the above.
 - **Other addons, plugins and skins:** a skin that finds the window by `Krowi_OptionsWindow` would lose it. None is known, and 2.0 is unreleased.
 - **Saved variables:** no shape changes. `LastSection` is written after the page fills; the shared keys are written as before.
@@ -123,7 +123,7 @@ The mechanisms:
 - **Checks:** the plugin's Lua 5.1 syntax hook on every edit, `Find-DeprecatedApi.ps1`, `krowi:taint-reviewer` on the diff, and `/code-review`.
 - **In game:** after the KAF session's pending Retail run and on Krowi's go. Use a KAF checkout whose `Libs/Krowi_Options` points at this branch, with KAF's `lib.WindowName` change in place.
   - `/kaftest options` on Retail and Mists, `/kaftest escape` on Retail.
-  - #8 needs the mouse. Hover a greyed-out setting (a key binding in combat, or a setting greyed by its check box) and read its help in the open pane and in the collapsed pane's tooltip. Retail and Mists.
+  - #8 needs the mouse. Hover a greyed-out setting (a key binding in combat, or a setting greyed by its check box) and read its help in the open pane and in the collapsed pane's tooltip. Retail and Mists. Hover a greyed-out slider bar and input box too; if they show no help, that goes into the backlog.
   - `Read-GameErrors.ps1` after the `/reload` shows no new error.
 
 ## Decision
