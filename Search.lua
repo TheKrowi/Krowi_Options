@@ -11,13 +11,15 @@
 -- also finds a row by its description. It reads only what every tab hands the window (Groups, SectionName, GetElements)
 -- and draws nothing.
 
-local lib = KROWI_LIBMAN:GetLibrary("Krowi_Options_1")
+-- Not "Search": LibMan hangs the submodule on lib under its name, where lib.Search is the search below
+local sub, lib = KROWI_LIBMAN:NewSubmodule("SearchModule", 0)
+if not sub then return end
 
 -- Grids, tab lists and cards draw as several rows; hidden options are left out. known: the kinds the window draws, nil
--- keeps every kind.
+-- keeps every kind. A section without elements (GetElements gives nil) has no rows.
 function lib.Flatten(elements, known)
     local list = {}
-    for _, element in ipairs(elements) do
+    for _, element in ipairs(elements or {}) do
         if element.Kind == "Cards" then
             local cards, columns = element.Cards, lib.CardColumns
             for first = 1, #cards, columns do
@@ -134,7 +136,7 @@ end
 -- order, and these blocks gather under the heading they stand under on the page.
 local function SearchSection(tab, id, words, broad)
     local config = tab.Config
-    local elements = lib.Flatten(config.GetElements(id) or {})
+    local elements = lib.Flatten(config.GetElements(id))
     local heading, headingIndex = "", 0
     local headingAt, groupAt, parentAt, rootAt = {}, {}, {}, {}
     local rowOf, subOf, atIndent, gridHeader = {}, {}, {}, nil -- an option's row, a member's All / None heading
@@ -150,14 +152,16 @@ local function SearchSection(tab, id, words, broad)
             local option = element.Option
             local indent = option and option.Indent or 0
             if option then
-                rowOf[option] = i
-                -- A parent that is hidden leaves its child alone rather than under the row above it
+                -- A parent that is hidden leaves its child alone rather than under the row above it. A parent is a row
+                -- above, found before this row is recorded: an option naming itself or a later row hangs under nothing,
+                -- so Take's walk up the parents always ends.
                 local parentOption = option.GetParent and option:GetParent()
                 if parentOption then
                     parent = rowOf[parentOption]
                 elseif indent > 0 then
                     parent = subOf[option] or atIndent[indent - 1]
                 end
+                rowOf[option] = i
             else
                 for _, member in ipairs(element.Members or {}) do subOf[member] = i end
             end

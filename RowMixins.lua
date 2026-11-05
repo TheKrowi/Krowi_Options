@@ -6,17 +6,26 @@
 ---@diagnostic disable: undefined-global
 
 -- The rows of the options page. An element (see WindowMixin.lua) picks its row; an option row reads the option's
--- interface: GetLabel, GetDescription, Type, Get, Set, IsDisabled, GetValues, GetRange, GetButtonText,
--- GetNeedsReload, IsChanged, Reset, Placeholder, Confirm (a select's question before a choice is made), for a key row
--- Slots (two options holding a key each), and optionally GetParent (the option it hangs under, which the search finds
--- with it). A toggle's element may carry With, an execute or range option drawn 5
--- after the check box as a 200 button or a 214 slider, as the game's check box with a button or a slider
--- (Blizzard_SettingControls.lua, SettingsCheckboxWithButtonControlMixin and SettingsCheckboxSliderControlMixin); the
--- row's name and changed line are the toggle's and With's together. A slider explains itself under the mouse; a button
--- is the check box's, whose name says what it does (Krowi, docs/work/2026-11-02-options-widths).
+-- interface:
+--   every option  Type ("toggle", "range", "select", "execute", "input" or "key"), GetLabel, IsHidden, IsDisabled, Get,
+--                 Set (an execute option's runs it), IsChanged, Reset, GetNeedsReload
+--   per type      range: GetRange (min, max, step), optionally Format(value); select: GetValues ({ { value, text } }),
+--                 optionally Placeholder and Confirm(value) (the question asked before a choice is made); execute:
+--                 GetButtonText; key: Slots (two options holding a key each)
+--   optionally    GetDescription, GetDefault (returning whether it has one, and the value) with FormatValue(value),
+--                 GetParent (the option it hangs under, which the search finds with it), Indent, Id (ScrollToOption)
+-- A grid's check boxes and a tab list's Show are options too. A toggle's element may carry With, an execute or range
+-- option with the same interface, drawn 5 after the check box as a 200 button or a 214 slider, as the game's check box
+-- with a button or a slider (Blizzard_SettingControls.lua, SettingsCheckboxWithButtonControlMixin and
+-- SettingsCheckboxSliderControlMixin); the row's name and changed line are the toggle's and With's together. A slider
+-- explains itself under the mouse; a button is the check box's, whose name says what it does (Krowi,
+-- docs/work/2026-11-02-options-widths).
 -- Every change goes through window:OnOptionChanged, which redraws the rows, their changed lines and the reload bar.
+-- RowFrames.lua builds each row and applies its mixin, kept on lib.Mixins rather than as a global, so the newest copy of
+-- the library decides.
 
-local lib = KROWI_LIBMAN:GetLibrary("Krowi_Options_1")
+local sub, lib = KROWI_LIBMAN:NewSubmodule("RowMixins", 0)
+if not sub then return end
 
 -- [[ Where a row's name and controls stand ]] --
 -- In a column 330 from the row's right edge, wide enough for the two key buttons (Krowi kept it over the game's placement
@@ -64,38 +73,49 @@ local controlOfType = { toggle = "Toggle", range = "Range", select = "Select", e
 
 -- [[ A key button ]] --
 -- The game's key binding button (KeyBindingFrameBindingButtonTemplate on UIMenuButtonStretchTemplate, the same on every
--- client): silver art that presses down under the mouse. Rows.xml copies its art with pieces that carry no names; the
--- template's $parent names would make a global per piece for every row.
-Krowi_OptionsKeyButtonMixin = {}
+-- client): silver art that presses down under the mouse. RowFrames.lua copies its art with pieces that carry no names;
+-- the template's $parent names would make a global per piece for every row.
+local KeyButtonMixin = {}
+lib.Mixins.KeyButton = KeyButtonMixin
 
 local keyButtonPieces = { "TopLeft", "TopRight", "BottomLeft", "BottomRight", "TopMiddle", "MiddleLeft", "MiddleRight", "BottomMiddle", "MiddleMiddle" }
 
-function Krowi_OptionsKeyButtonMixin:SetPieces(file)
+function KeyButtonMixin:SetPieces(file)
     for _, piece in ipairs(keyButtonPieces) do
         self[piece]:SetTexture(file)
     end
 end
 
-function Krowi_OptionsKeyButtonMixin:OnMouseDown()
+function KeyButtonMixin:OnMouseDown()
     if self:IsEnabled() then self:SetPieces("Interface\\Buttons\\UI-Silver-Button-Down") end
 end
 
 -- On mouse up, and on show and enable in case it was hidden or disabled before the mouse came up
-function Krowi_OptionsKeyButtonMixin:Lift()
+function KeyButtonMixin:Lift()
     self:SetPieces("Interface\\Buttons\\UI-Silver-Button-Up")
 end
 
 -- [[ Header, sub-heading, note ]] --
-Krowi_OptionsTextRowMixin = {}
+local TextRowMixin = {}
+lib.Mixins.TextRow = TextRowMixin
 
-function Krowi_OptionsTextRowMixin:Init(element)
+function TextRowMixin:Init(element)
     self.Text:SetText(element.Text or "")
 end
 
 -- [[ An option ]] --
-Krowi_OptionsOptionRowMixin = {}
+local OptionRowMixin = {}
+lib.Mixins.OptionRow = OptionRowMixin
+
+-- A control under the mouse fires its OnEnter while greyed out too, as the game's own settings check box does
+-- (SettingsCheckboxTemplate's motionScriptsWhileDisabled, Blizzard_SettingControls.xml), so the help still says what a
+-- disabled option is. Only buttons have the setting, not a slider or an edit box.
+local function HoverWhileDisabled(control)
+    if control.SetMotionScriptsWhileDisabled then control:SetMotionScriptsWhileDisabled(true) end
+end
 
 local function Forward(control, row)
+    HoverWhileDisabled(control)
     control:HookScript("OnEnter", function() row:OnEnter(control) end)
     control:HookScript("OnLeave", function() row:OnLeave() end)
 end
@@ -116,7 +136,7 @@ local function WithControl(row)
     return row.With and (row.With.Type == "range" and row.Range or row.Execute)
 end
 
-function Krowi_OptionsOptionRowMixin:OnLoad()
+function OptionRowMixin:OnLoad()
     self.Reset:SetScript("OnClick", function()
         self.Option:Reset()
         if self.With then self.With:Reset() end
@@ -194,7 +214,7 @@ local function RefreshRange(row, option, disabled)
     row.Range:SetEnabled(not disabled)
 end
 
-function Krowi_OptionsOptionRowMixin:Init(element, window)
+function OptionRowMixin:Init(element, window)
     self:EndKeyCapture() -- a recycled row must not bind the next key to its new option
     self.Element, self.Window, self.Option = element, window, element.Option
     local option = self.Option
@@ -259,11 +279,17 @@ function Krowi_OptionsOptionRowMixin:Init(element, window)
     self:Refresh()
 end
 
-function Krowi_OptionsOptionRowMixin:Refresh()
+-- The mouse on the row where the list shows it: IsMouseOver tests the whole row, also a part scrolled out of the list,
+-- so leaving through that part would keep the arrow (docs/work/2026-11-04-krowi-options-library)
+local function UnderMouse(row)
+    return row:IsMouseOver() and row.Window.PageScrollBox:IsMouseOver()
+end
+
+function OptionRowMixin:Refresh()
     local option = self.Option
     if not option then return end
     local disabled = option:IsDisabled()
-    local strings = self.Window:StringsFor(self.Element)
+    local strings = self.Window.Strings
     self.Label:SetFontObject(disabled and "GameFontDisable" or "GameFontNormal")
 
     local with = self.With
@@ -274,7 +300,7 @@ function Krowi_OptionsOptionRowMixin:Refresh()
     end
     local changed = Changed(self)
     self.ChangedBar:SetShown(changed)
-    self.Reset:SetShown(changed and self:IsMouseOver()) -- a change made under the mouse shows the arrow at once
+    self.Reset:SetShown(changed and UnderMouse(self)) -- a change made under the mouse shows the arrow at once
 
     local t = option.Type
     if t == "toggle" then
@@ -320,7 +346,7 @@ end
 -- Key capture, as AceGUI's keybinding widget did it: the button takes the next key, mouse button 3 to 5 or wheel turn;
 -- Escape clears the binding, a second click cancels. One button captures at a time in the whole window. Out of combat
 -- only (the game blocks binding changes in combat, and the buttons are greyed out there).
-function Krowi_OptionsOptionRowMixin:StartKeyCapture(slot)
+function OptionRowMixin:StartKeyCapture(slot)
     local cancel = self.Capturing == slot
     self.Window:EndKeyCaptures()
     if cancel or InCombatLockdown() then
@@ -334,7 +360,7 @@ function Krowi_OptionsOptionRowMixin:StartKeyCapture(slot)
     self:Refresh()
 end
 
-function Krowi_OptionsOptionRowMixin:EndKeyCapture()
+function OptionRowMixin:EndKeyCapture()
     if not self.Capturing then return end
     self.Capturing = nil
     for _, button in ipairs({ self.Key1, self.Key2 }) do
@@ -345,7 +371,7 @@ function Krowi_OptionsOptionRowMixin:EndKeyCapture()
 end
 
 local ignoredKeys = { LSHIFT = true, RSHIFT = true, LCTRL = true, RCTRL = true, LALT = true, RALT = true, UNKNOWN = true }
-function Krowi_OptionsOptionRowMixin:OnKeyCaptured(slot, key)
+function OptionRowMixin:OnKeyCaptured(slot, key)
     if self.Capturing ~= slot or ignoredKeys[key] then return end
     self:EndKeyCapture()
     if InCombatLockdown() then return end
@@ -355,7 +381,7 @@ function Krowi_OptionsOptionRowMixin:OnKeyCaptured(slot, key)
 end
 
 -- control: the row's control the mouse came onto (Forward); the row's own OnEnter passes its motion flag instead
-function Krowi_OptionsOptionRowMixin:OnEnter(control)
+function OptionRowMixin:OnEnter(control)
     self.Hover:Show()
     self.Reset:SetShown(self.Option and Changed(self))
     local onSlider = type(control) == "table" and (control == self.Range or control:GetParent() == self.Range)
@@ -368,16 +394,17 @@ function Krowi_OptionsOptionRowMixin:OnEnter(control)
 end
 
 -- Moving onto one of the row's own controls leaves the row too: the arrow stays while the mouse is on the row
-function Krowi_OptionsOptionRowMixin:OnLeave()
+function OptionRowMixin:OnLeave()
     self.Hover:Hide()
-    if not self:IsMouseOver() then self.Reset:Hide() end
+    if not UnderMouse(self) then self.Reset:Hide() end
     self.Window:OnRowLeave(self.Option)
 end
 
 -- [[ A family heading or a group's All / None ]] --
-Krowi_OptionsSubRowMixin = {}
+local SubRowMixin = {}
+lib.Mixins.SubRow = SubRowMixin
 
-function Krowi_OptionsSubRowMixin:OnLoad()
+function SubRowMixin:OnLoad()
     local function SetAll(value)
         local reloadMember -- one that needs a reload, so the window shows the reload bar
         for _, option in ipairs(self.Element.Members) do
@@ -392,11 +419,11 @@ function Krowi_OptionsSubRowMixin:OnLoad()
     self.None:SetScript("OnClick", function() SetAll(false) end)
 end
 
-function Krowi_OptionsSubRowMixin:Init(element, window)
+function SubRowMixin:Init(element, window)
     self.Element, self.Window = element, window
     self.Text:SetText(element.Text or "")
     Place(self.All, self, lib.RowGeometry(0).Sub)
-    local strings = window:StringsFor(element)
+    local strings = window.Strings
     self.All:SetText(strings.All)
     self.None:SetText(strings.None)
 end
@@ -404,9 +431,10 @@ end
 -- [[ A grid: column titles, then a row of check boxes per line ]] --
 local gridLeft, gridColumn, gridColumns = 200, 72, 5
 
-Krowi_OptionsGridHeaderRowMixin = {}
+local GridHeaderRowMixin = {}
+lib.Mixins.GridHeaderRow = GridHeaderRowMixin
 
-function Krowi_OptionsGridHeaderRowMixin:OnLoad()
+function GridHeaderRowMixin:OnLoad()
     self.Columns = {}
     for i = 1, gridColumns do
         local text = self:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
@@ -417,18 +445,19 @@ function Krowi_OptionsGridHeaderRowMixin:OnLoad()
     end
 end
 
-function Krowi_OptionsGridHeaderRowMixin:Init(element)
+function GridHeaderRowMixin:Init(element)
     for i, text in ipairs(self.Columns) do
         text:SetText(element.Columns[i] or "")
     end
 end
 
-Krowi_OptionsGridRowMixin = {}
+local GridRowMixin = {}
+lib.Mixins.GridRow = GridRowMixin
 
-function Krowi_OptionsGridRowMixin:OnLoad()
+function GridRowMixin:OnLoad()
     self.Cells = {}
     for i = 1, gridColumns do
-        local cell = CreateFrame("CheckButton", nil, self, "Krowi_OptionsCheckButtonTemplate")
+        local cell = lib.Build.CheckButton(self)
         cell:SetPoint("CENTER", self, "LEFT", gridLeft + (i - 0.5) * gridColumn, 0)
         cell:SetScript("OnClick", function()
             local option = self.Element.Cells[i]
@@ -441,13 +470,13 @@ function Krowi_OptionsGridRowMixin:OnLoad()
     end
 end
 
-function Krowi_OptionsGridRowMixin:Init(element, window)
+function GridRowMixin:Init(element, window)
     self.Element, self.Window = element, window
     self.Label:SetText(element.Label or "")
     self:Refresh()
 end
 
-function Krowi_OptionsGridRowMixin:Refresh()
+function GridRowMixin:Refresh()
     for i, cell in ipairs(self.Cells) do
         local option = self.Element.Cells[i]
         cell:SetShown(option ~= nil)
@@ -459,22 +488,23 @@ function Krowi_OptionsGridRowMixin:Refresh()
 end
 
 -- column: the hovered check box's; the row itself (its script passes the motion flag) describes the first one
-function Krowi_OptionsGridRowMixin:OnEnter(column)
+function GridRowMixin:OnEnter(column)
     self.Hover:Show()
     column = type(column) == "number" and column or 1
     self.Window:OnRowEnter(self.Element.Cells[column], self, gridLeft + (column - 0.5) * gridColumn - self.Cells[column]:GetWidth() / 2)
 end
 
-function Krowi_OptionsGridRowMixin:OnLeave()
+function GridRowMixin:OnLeave()
     self.Hover:Hide()
     self.Window:OnRowLeave()
 end
 
 -- [[ The tab list: a tab's position, whether it shows, and arrows to move it ]] --
 -- The check box is ShowCheck, not Show: a child key named Show replaces the row's own Show method.
-Krowi_OptionsTabRowMixin = {}
+local TabRowMixin = {}
+lib.Mixins.TabRow = TabRowMixin
 
-function Krowi_OptionsTabRowMixin:OnLoad()
+function TabRowMixin:OnLoad()
     self.ShowCheck:SetScript("OnClick", function()
         local option = self.Element.Item.Show
         option:Set(not option:Get())
@@ -489,12 +519,13 @@ function Krowi_OptionsTabRowMixin:OnLoad()
         self.Window:ReloadSection()
     end)
     for _, control in ipairs({ self.ShowCheck, self.Up, self.Down }) do
+        HoverWhileDisabled(control)
         control:HookScript("OnEnter", function() self:OnEnter() end)
         control:HookScript("OnLeave", function() self:OnLeave() end)
     end
 end
 
-function Krowi_OptionsTabRowMixin:Init(element, window)
+function TabRowMixin:Init(element, window)
     self.Element, self.Window = element, window
     local item = element.Item
     self.Position:SetText(item.Position)
@@ -506,7 +537,7 @@ function Krowi_OptionsTabRowMixin:Init(element, window)
     self:Refresh()
 end
 
-function Krowi_OptionsTabRowMixin:Refresh()
+function TabRowMixin:Refresh()
     local option = self.Element.Item.Show
     if option then
         self.ShowCheck:SetChecked(option:Get() and true or false)
@@ -514,46 +545,48 @@ function Krowi_OptionsTabRowMixin:Refresh()
     end
 end
 
-function Krowi_OptionsTabRowMixin:OnEnter()
+function TabRowMixin:OnEnter()
     self.Hover:Show()
-    self.Window:OnRowEnter(self.Element.Item.Show, self, 34) -- where ShowCheck stands (Rows.xml)
+    self.Window:OnRowEnter(self.Element.Item.Show, self, 34) -- where ShowCheck stands (RowFrames.lua)
 end
 
-function Krowi_OptionsTabRowMixin:OnLeave()
+function TabRowMixin:OnLeave()
     self.Hover:Hide()
     self.Window:OnRowLeave()
 end
 
 -- [[ A section's name in the search results, as the game's (SettingsListSearchCategoryMixin): a click opens it ]] --
-Krowi_OptionsSearchHeadingRowMixin = {}
+local SearchHeadingRowMixin = {}
+lib.Mixins.SearchHeadingRow = SearchHeadingRowMixin
 
-function Krowi_OptionsSearchHeadingRowMixin:Init(element)
+function SearchHeadingRowMixin:Init(element)
     self.Element = element
     self.Title:SetText(element.Text or "")
 end
 
-function Krowi_OptionsSearchHeadingRowMixin:OnClick()
+function SearchHeadingRowMixin:OnClick()
     if self.Element.OnClick then self.Element.OnClick() end
 end
 
-function Krowi_OptionsSearchHeadingRowMixin:OnEnter()
+function SearchHeadingRowMixin:OnEnter()
     self.MouseoverOverlay:Show()
 end
 
-function Krowi_OptionsSearchHeadingRowMixin:OnLeave()
+function SearchHeadingRowMixin:OnLeave()
     self.MouseoverOverlay:Hide()
 end
 
 -- [[ A link: a New section, an overview entry ]] --
-Krowi_OptionsLinkRowMixin = {}
+local LinkRowMixin = {}
+lib.Mixins.LinkRow = LinkRowMixin
 
-function Krowi_OptionsLinkRowMixin:Init(element)
+function LinkRowMixin:Init(element)
     self.Element = element
     self.Text:SetText(element.Text or "")
     self.Detail:SetText(element.Detail or "")
 end
 
-function Krowi_OptionsLinkRowMixin:OnClick()
+function LinkRowMixin:OnClick()
     if self.Element.OnClick then self.Element.OnClick() end
 end
 
@@ -561,7 +594,7 @@ end
 -- A card is { Picture, Width, Height, TexCoords, Part } (a picture as the help pane draws it, Part optional, see
 -- CardCrop) or { Icon }, and Name, Text, IsNew and OnClick. The cards and the 12 between them fill the row. A picture fills the 86 high area inside the card's 1 px
 -- border, cut to it from its top left, as the mockup's thumbnails were (object-fit: cover); the name and the line stand 10
--- in from the card's sides. The fonts are Rows.xml's.
+-- in from the card's sides. The fonts are RowFrames.lua's.
 lib.CardColumns = 3
 local cardGap, cardBorder, pictureHeight = 12, 1, 86
 local cardTextInset, nameTop, lineGap, cardBottom, newGap = 10, 8, 3, 10, 6
@@ -596,17 +629,18 @@ function lib.CardRowHeight(window, element)
     return 2 * cardBorder + pictureHeight + nameTop + nameHeight + (lineHeight > 0 and lineGap + lineHeight or 0) + cardBottom + cardGap
 end
 
-Krowi_OptionsCardRowMixin = {}
+local CardRowMixin = {}
+lib.Mixins.CardRow = CardRowMixin
 
-function Krowi_OptionsCardRowMixin:OnLoad()
+function CardRowMixin:OnLoad()
     self.Cards = {}
     for i = 1, lib.CardColumns do
-        self.Cards[i] = CreateFrame("Button", nil, self, "Krowi_OptionsCardTemplate")
+        self.Cards[i] = lib.Build.Card(self)
     end
 end
 
 -- The row's own width is the page's, which the window knows before the view has sized the row
-function Krowi_OptionsCardRowMixin:Init(element, window)
+function CardRowMixin:Init(element, window)
     self.Element = element
     local width = lib.CardWidth(window:PageWidth())
     for i, frame in ipairs(self.Cards) do
@@ -620,9 +654,10 @@ function Krowi_OptionsCardRowMixin:Init(element, window)
     end
 end
 
-Krowi_OptionsCardMixin = {}
+local CardMixin = {}
+lib.Mixins.Card = CardMixin
 
-function Krowi_OptionsCardMixin:Init(card, width)
+function CardMixin:Init(card, width)
     self.Card = card
     self.Picture:SetShown(card.Picture ~= nil)
     self.Icon:SetShown(card.Picture == nil and card.Icon ~= nil)
@@ -651,20 +686,20 @@ function Krowi_OptionsCardMixin:Init(card, width)
     self:SetHovered(self:IsMouseOver())
 end
 
-function Krowi_OptionsCardMixin:SetHovered(hovered)
+function CardMixin:SetHovered(hovered)
     self.Hover:SetShown(hovered)
     local color = hovered and borderHoverColor or borderColor
     for _, edge in ipairs(self.Edges) do edge:SetColorTexture(unpack(color)) end
 end
 
-function Krowi_OptionsCardMixin:OnEnter()
+function CardMixin:OnEnter()
     self:SetHovered(true)
 end
 
-function Krowi_OptionsCardMixin:OnLeave()
+function CardMixin:OnLeave()
     self:SetHovered(false)
 end
 
-function Krowi_OptionsCardMixin:OnClick()
+function CardMixin:OnClick()
     if self.Card.OnClick then self.Card.OnClick() end
 end

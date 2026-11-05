@@ -1,6 +1,14 @@
+<!--
+    Copyright (c) 2026 Krowi
+    Licensed under the terms of the LICENSE file in this repository.
+ -->
+
 <Ui>
-    <Script file="Krowi_Options.lua" />
-    <Script file="Search.lua" />
-    <Include file="Rows.xml" />
-    <Include file="Window.xml" />
+    <Script file="Krowi_Options.lua"/>
+    <Include file="Localization\Files.xml"/>
+    <Script file="Search.lua"/>
+    <Script file="RowMixins.lua"/>
+    <Script file="RowFrames.lua"/>
+    <Script file="WindowMixin.lua"/>
+    <Script file="WindowFrame.lua"/>
 </Ui>

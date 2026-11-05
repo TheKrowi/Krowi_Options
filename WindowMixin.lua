@@ -6,14 +6,12 @@
 ---@diagnostic disable: undefined-global
 
 -- The window: a tab per registered addon on top, the open addon's navigation on the left, the section's rows in the
--- middle, the help pane on the right, in the frame and art of the game's own Options window. Strings come from the open
--- tab's consumer (config.Strings): Search, SearchAll, SearchBroad, SearchHelp, SearchHelpBroad, Overview, SearchResults,
--- NoResults, Defaults, ResetSection (with %s), ChangedCount (with %d), ReloadText, ReloadNow, ShowMe, HowItWorks, All,
--- None, NotBound, PressAKey, Default (with %s), NeedsReload, NotInCombat, and optionally ResetToDefault (the game's
--- RESET_TO_DEFAULT otherwise). A row in a search of every tab may be another addon's: it takes that addon's strings
--- (StringsFor).
+-- middle, the help pane on the right, in the frame and art of the game's own Options window. Its strings are the
+-- library's own (lib.GetStrings in Krowi_Options.lua, translated on the library's CurseForge project), the same on every
+-- tab; the game's RESET_TO_DEFAULT names the undo arrow. WindowFrame.lua builds the window and its list rows.
 
-local lib = KROWI_LIBMAN:GetLibrary("Krowi_Options_1")
+local sub, lib = KROWI_LIBMAN:NewSubmodule("WindowMixin", 0)
+if not sub then return end
 
 -- The navigation is as wide as the game's category list, so its header bars (199 px) end at the divider
 local navWidth, helpWidth, stripWidth = 199, 380, 30
@@ -33,9 +31,10 @@ end
 -- [[ Navigation ]] --
 -- The game's category list (Blizzard_CategoryList.lua): a group under a header bar, a section gold, the selected one
 -- white on the active bar, the hovered one on the hover bar
-Krowi_OptionsNavButtonMixin = {}
+local NavButtonMixin = {}
+lib.Mixins.NavButton = NavButtonMixin
 
-function Krowi_OptionsNavButtonMixin:Init(element, window)
+function NavButtonMixin:Init(element, window)
     self.Element, self.Window = element, window
     self.Label:SetText(element.Text)
     if element.IsNew then
@@ -50,7 +49,7 @@ function Krowi_OptionsNavButtonMixin:Init(element, window)
     self:UpdateState()
 end
 
-function Krowi_OptionsNavButtonMixin:UpdateState()
+function NavButtonMixin:UpdateState()
     self.Label:SetFontObject(self.Selected and "GameFontHighlight" or "GameFontNormal")
     if self.Selected or self.Over then
         self.Texture:SetAtlas(self.Selected and "Options_List_Active" or "Options_List_Hover", true)
@@ -60,81 +59,122 @@ function Krowi_OptionsNavButtonMixin:UpdateState()
     end
 end
 
-function Krowi_OptionsNavButtonMixin:OnEnter()
+function NavButtonMixin:OnEnter()
     self.Over = true
     self:UpdateState()
 end
 
-function Krowi_OptionsNavButtonMixin:OnLeave()
+function NavButtonMixin:OnLeave()
     self.Over = nil
     self:UpdateState()
 end
 
-function Krowi_OptionsNavButtonMixin:OnClick()
+function NavButtonMixin:OnClick()
     self.Window:ShowSection(self.Element.Id)
 end
 
-Krowi_OptionsNavHeaderMixin = {}
+local NavHeaderMixin = {}
+lib.Mixins.NavHeader = NavHeaderMixin
 
-function Krowi_OptionsNavHeaderMixin:Init(element)
+function NavHeaderMixin:Init(element)
     self.Label:SetText(element.Text)
     self.Background:SetAtlas("Options_CategoryHeader_" .. element.Index, true)
 end
 
 -- [[ Help pane blocks ]] --
-Krowi_OptionsHelpTextMixin = {}
+local HelpTextMixin = {}
+lib.Mixins.HelpText = HelpTextMixin
 
-function Krowi_OptionsHelpTextMixin:Init(element)
+function HelpTextMixin:Init(element)
     self.Text:SetFontObject(element.Font)
     self.Text:SetText(element.Text)
 end
 
 -- A picture enlarges on click (the window's lightbox); the magnifier cursor says so
-Krowi_OptionsHelpPictureMixin = {}
+local HelpPictureMixin = {}
+lib.Mixins.HelpPicture = HelpPictureMixin
 
-function Krowi_OptionsHelpPictureMixin:Init(element, window)
+function HelpPictureMixin:Init(element, window)
     self.Element, self.Window = element, window
     self.Picture:SetTexture(element.Picture)
     self.Picture:SetSize(element.DrawWidth, element.DrawHeight)
     if element.TexCoords then self.Picture:SetTexCoord(unpack(element.TexCoords)) else self.Picture:SetTexCoord(0, 1, 0, 1) end
 end
 
-function Krowi_OptionsHelpPictureMixin:OnClick()
+function HelpPictureMixin:OnClick()
     self.Window:ShowPicture(self.Element)
 end
 
-function Krowi_OptionsHelpPictureMixin:OnEnter()
+function HelpPictureMixin:OnEnter()
     SetCursor("INSPECT_CURSOR")
 end
 
-function Krowi_OptionsHelpPictureMixin:OnLeave()
+function HelpPictureMixin:OnLeave()
     ResetCursor()
 end
 
 -- [[ The window ]] --
-Krowi_OptionsWindowMixin = {}
+local WindowMixin = {}
+lib.Mixins.Window = WindowMixin
 
-local rowTemplates = {
-    Header = { "Krowi_OptionsHeaderRowTemplate", 34 },
-    SubHeading = { "Krowi_OptionsSubHeadingRowTemplate", 26 },
-    Note = { "Krowi_OptionsNoteRowTemplate" },
-    Option = { "Krowi_OptionsOptionRowTemplate", 30 },
-    Sub = { "Krowi_OptionsSubRowTemplate", 28 },
-    GridHeader = { "Krowi_OptionsGridHeaderRowTemplate", 34 },
-    GridRow = { "Krowi_OptionsGridRowTemplate", 28 },
-    TabRow = { "Krowi_OptionsTabRowTemplate", 28 },
-    Link = { "Krowi_OptionsLinkRowTemplate", 26 },
-    CardRow = { "Krowi_OptionsCardRowTemplate" },
-    SearchHeading = { "Krowi_OptionsSearchHeadingRowTemplate", 45 },
+-- Each element kind: the builder of its row (lib.Build, RowFrames.lua) and its height
+local rowKinds = {
+    Header = { "HeaderRow", 34 },
+    SubHeading = { "SubHeadingRow", 26 },
+    Note = { "NoteRow" },
+    Option = { "OptionRow", 30 },
+    Sub = { "SubRow", 28 },
+    GridHeader = { "GridHeaderRow", 34 },
+    GridRow = { "GridRow", 28 },
+    TabRow = { "TabRow", 28 },
+    Link = { "LinkRow", 26 },
+    CardRow = { "CardRow" },
+    SearchHeading = { "SearchHeadingRow", 45 },
 }
 
--- leftPad and spacing as the game's category list uses them (Blizzard_CategoryList.lua): its scroll box reaches 50 px
--- left of the list, so a NEW label hanging left of a section is not clipped, and the rows move back by as much
-local function InitList(window, scrollBox, scrollBar, templates, extent, leftPad, spacing)
+-- The rows are built in Lua, without a template, and a list pools the frames it hands out by frame type alone, so a
+-- header's frame could come back for an option row (Blizzard_SharedXMLBase FrameFactory.lua). So the list hands out a
+-- plain frame, and the row of the element's kind hangs on it as frame.Row, from a pool per kind; when the list lets the
+-- frame go, its row goes back (docs/work/2026-11-04-krowi-options-library). Code that walks a list's frames reads
+-- frame.Row. leftPad and spacing as the game's category list uses them (Blizzard_CategoryList.lua): its scroll box
+-- reaches 50 px left of the list, so a NEW label hanging left of a section is not clipped, and the rows move back by as
+-- much.
+local function InitList(window, scrollBox, scrollBar, kinds, extent, leftPad, spacing)
+    local free = {} -- per kind, the rows not hung on a frame
+    local function Release(host)
+        local row = host.Row
+        if not row then return end
+        row:Hide()
+        row:ClearAllPoints()
+        free[row.ListKind] = free[row.ListKind] or {}
+        tinsert(free[row.ListKind], row)
+        host.Row = nil
+    end
     local view = CreateScrollBoxListLinearView(0, 0, leftPad or 0, 0, spacing or 0)
     view:SetElementFactory(function(factory, element)
-        local template = templates[element.Kind]
-        factory(template[1], function(frame, data) if frame.Init then frame:Init(data, window) end end)
+        local kind = element.Kind
+        factory("Frame", function(host, data)
+            if host.Row and host.Row.ListKind ~= kind then Release(host) end
+            local row = host.Row
+            if not row then
+                row = free[kind] and tremove(free[kind])
+                if not row then
+                    row = lib.Build[kinds[kind][1]](host)
+                    row.ListKind = kind
+                end
+                row:SetParent(host)
+                row:SetAllPoints(host)
+                row:Show()
+                host.Row = row
+            end
+            if row.Init then row:Init(data, window) end
+        end)
+    end)
+    -- A resetter replaces the pool's own, which hides the frame and clears its anchors
+    view:SetFrameFactoryResetter(function(_, host)
+        Release(host)
+        host:Hide()
+        host:ClearAllPoints()
     end)
     view:SetElementExtentCalculator(function(_, element) return extent(element) end)
     ScrollUtil.InitScrollBoxListWithScrollBar(scrollBox, scrollBar, view)
@@ -158,7 +198,7 @@ local innerSlices = { -- left to right: a slice's piece of the atlas
     { Key = "Right", Atlas = "Right" },
 }
 
-function Krowi_OptionsWindowMixin:CreateInnerFrame()
+function WindowMixin:CreateInnerFrame()
     local info = C_Texture.GetAtlasInfo("Options_InnerFrame")
     if not info then return end
     local function U(x) return info.leftTexCoord + (info.rightTexCoord - info.leftTexCoord) * x / info.width end
@@ -179,7 +219,7 @@ end
 -- Each slice spans an edge and offset of the inner frame to another, across and down
 local innerRowAnchors = { Top = { "TOP", 0, "TOP", -90 }, Middle = { "TOP", -90, "BOTTOM", 178 }, Bottom = { "BOTTOM", 178, "BOTTOM", 0 } }
 
-function Krowi_OptionsWindowMixin:LayoutInnerFrame(navEnd, right)
+function WindowMixin:LayoutInnerFrame(navEnd, right)
     if not self.InnerSlices then return end
     -- The frame starts 1 px left of the body: the divider's 2 px straddle the navigation's end and the help pane's start
     local divider, help = navEnd, right + 2
@@ -204,7 +244,7 @@ function Krowi_OptionsWindowMixin:LayoutInnerFrame(navEnd, right)
     end
 end
 
-function Krowi_OptionsWindowMixin:OnLoad()
+function WindowMixin:OnLoad()
     self:RegisterForDrag("LeftButton")
 
     -- A plain Hide on both: HideUIPanel, the template's own, refuses addon code in combat
@@ -220,20 +260,20 @@ function Krowi_OptionsWindowMixin:OnLoad()
     self.Measure:SetJustifyH("LEFT")
 
     local navBar = InitList(self, self.NavScrollBox, self.NavScrollBar, {
-        NavHeader = { "Krowi_OptionsNavHeaderTemplate" },
-        NavButton = { "Krowi_OptionsNavButtonTemplate" },
-        NavSpacer = { "Krowi_OptionsNavSpacerTemplate" },
+        NavHeader = { "NavHeader" },
+        NavButton = { "NavButton" },
+        NavSpacer = { "NavSpacer" },
     }, function(element) return navExtents[element.Kind] end, navLeftPad, 2)
     self.NavScrollShown = self.NavScrollBar:IsShown()
     navBar:RegisterCallback(ManagedScrollBarVisibilityBehaviorMixin.Event.OnVisibilityChanged, function(_, shown) self:OnNavScrollBarShown(shown) end, self)
-    InitList(self, self.PageScrollBox, self.PageScrollBar, rowTemplates, function(element)
+    InitList(self, self.PageScrollBox, self.PageScrollBar, rowKinds, function(element)
         if element.Kind == "Note" then return self:MeasureText(element.Text, "GameFontDisable", self:PageWidth() - 32) + 8 end
         if element.Kind == "CardRow" then return lib.CardRowHeight(self, element) end
-        return rowTemplates[element.Kind][2]
+        return rowKinds[element.Kind][2]
     end, pageInsets.Pad)
     self.HelpBar = InitList(self, self.HelpScrollBox, self.HelpScrollBar, {
-        HelpText = { "Krowi_OptionsHelpTextTemplate" },
-        HelpPicture = { "Krowi_OptionsHelpPictureTemplate" },
+        HelpText = { "HelpText" },
+        HelpPicture = { "HelpPicture" },
     }, function(element)
         if element.Kind == "HelpPicture" then return element.DrawHeight + 10 end
         return self:MeasureText(element.Text, element.Font, helpWidth - 52) + (element.Gap or 6)
@@ -305,7 +345,7 @@ function Krowi_OptionsWindowMixin:OnLoad()
 end
 
 -- The window's own state, from the saved table of the addon that opened it first; every addon keeps a copy (lib.SetShared)
-function Krowi_OptionsWindowMixin:Init(saved)
+function WindowMixin:Init(saved)
     if saved.Size then self:SetHeight(math.max(saved.Size[2], minHeight)) end -- the width follows the pane alone
     self.PaneCollapsed = saved.PaneCollapsed and true or false
     self:ApplyWidth()
@@ -323,7 +363,7 @@ end
 -- The game's width plus the help pane or its strip; a window wider than the screen (a large UI scale) is scaled down to
 -- fit, and one taller than it (a height saved on a larger screen) comes back inside it. keepLeft: the window grows and
 -- shrinks to the right, its top left staying where it is, and that place is saved.
-function Krowi_OptionsWindowMixin:ApplyWidth(keepLeft)
+function WindowMixin:ApplyWidth(keepLeft)
     local width = lib.WindowWidth(self.PaneCollapsed)
     local screen = UIParent:GetWidth()
     local scale = screen > 0 and math.min(1, (screen - 40) / width) or 1
@@ -351,7 +391,7 @@ end
 -- [[ Tabs ]] --
 -- A tab per registered addon where the game's window has Game and AddOns (Blizzard_SettingsPanel.xml). Our own click
 -- replaces MinimalTabTemplate's, which would let a click on the open tab unselect it.
-function Krowi_OptionsWindowMixin:RefreshTabs()
+function WindowMixin:RefreshTabs()
     local tabs = lib.Tabs
     for i, tab in ipairs(tabs) do
         local button = self.TabButtons[i]
@@ -389,7 +429,7 @@ end
 
 -- Searching every tab means something only with a second tab: the check box shows from then on. The broad search's
 -- check box stands before it, or before Close until then, and the reload bar reaches to it.
-function Krowi_OptionsWindowMixin:UpdateSearchAll()
+function WindowMixin:UpdateSearchAll()
     local several = #lib.Tabs > 1
     self.SearchAll:SetShown(several)
     self.SearchAllLabel:SetShown(several)
@@ -399,12 +439,13 @@ function Krowi_OptionsWindowMixin:UpdateSearchAll()
 end
 
 -- Shows the window on an addon's tab: its sections, strings and saved table, at sectionId or the addon's landing section
-function Krowi_OptionsWindowMixin:ShowTab(tab, sectionId, optionId)
+function WindowMixin:ShowTab(tab, sectionId, optionId)
     if self.Tab ~= tab then
+        local saved = tab:GetSaved() -- first: a tab without a saved table errors with the window left as it was
         self:EndKeyCaptures()
         self:ReleaseShowMe()
         self.Tab = tab
-        self.Config, self.Strings, self.Saved = tab.Config, tab.Config.Strings, tab:GetSaved()
+        self.Config, self.Strings, self.Saved = tab.Config, lib.GetStrings(), saved
         self.SectionId, self.Help, self.Searching, self.Confirming = nil, nil, nil, nil
         self:ApplyStrings()
         self:RefreshTabs()
@@ -418,21 +459,18 @@ local function FitButton(button)
     button:SetWidth(math.max(96, button:GetFontString():GetStringWidth() + 24))
 end
 
-function Krowi_OptionsWindowMixin:ApplyStrings()
+function WindowMixin:ApplyStrings()
     local strings = self.Strings
-    self.SearchBox.Instructions:SetText(strings.Search or "")
-    self.SearchAllLabel:SetText(strings.SearchAll or "")
+    self.SearchBox.Instructions:SetText(strings.Search)
+    self.SearchAllLabel:SetText(strings.SearchAll)
     self.SearchAll:SetHitRectInsets(0, -(self.SearchAllLabel:GetStringWidth() + 4), 0, 0) -- the label ticks it too
-    -- An addon that names no broad search does not offer it on its tab
-    self.SearchBroadLabel:SetText(strings.SearchBroad or "")
+    self.SearchBroadLabel:SetText(strings.SearchBroad)
     self.SearchBroad:SetHitRectInsets(0, -(self.SearchBroadLabel:GetStringWidth() + 4), 0, 0)
-    self.SearchBroad:SetShown(strings.SearchBroad ~= nil)
-    self.SearchBroadLabel:SetShown(strings.SearchBroad ~= nil)
     -- The collapsed pane's strip: the chevron, then the pane's name down the strip; the whole strip brings the pane back.
     -- A turned text turns about its centre, so it hangs below the chevron by half its length; its letters sit off the
     -- line's middle, so it moves right to stand under the chevron (measured in game, 2026-10-30)
     local label = self.ExpandButton.Label
-    label:SetText(strings.HowItWorks or "") -- as the open pane writes it; upper() would leave non-English letters small
+    label:SetText(strings.HowItWorks) -- as the open pane writes it; upper() would leave non-English letters small
     local length = label:GetStringWidth()
     label:ClearAllPoints()
     label:SetPoint("CENTER", self.ExpandButton, "TOP", 6, -(28 + length / 2))
@@ -442,10 +480,10 @@ function Krowi_OptionsWindowMixin:ApplyStrings()
     self.ReloadButton:SetText(strings.ReloadNow)
     self.ReloadText:SetText(lib.Markup.Reload .. " " .. strings.ReloadText) -- the rows' reload arrow, explained
     self.ShowMeButton:SetText(strings.ShowMe)
-    self.CancelButton:SetText(strings.No or NO)
+    self.CancelButton:SetText(NO)
 end
 
-function Krowi_OptionsWindowMixin:MeasureText(text, font, width)
+function WindowMixin:MeasureText(text, font, width)
     self.Measure:SetFontObject(font)
     self.Measure:SetWidth(math.max(width, 50))
     self.Measure:SetText(text or "")
@@ -462,11 +500,11 @@ local navBarX = 2.5
 
 -- Where the navigation ends and its divider stands: right after the list, where the game's window has it, or past the
 -- list's scroll bar while not all of it fits
-function Krowi_OptionsWindowMixin:NavEnd()
+function WindowMixin:NavEnd()
     return self.NavScrollShown and navWidth + navBarSpace or navWidth
 end
 
-function Krowi_OptionsWindowMixin:OnNavScrollBarShown(shown)
+function WindowMixin:OnNavScrollBarShown(shown)
     if self.NavScrollShown == shown then return end
     self.NavScrollShown = shown
     -- Showing a section or a search fills the page after the navigation, already at the new width: it lays out once
@@ -479,7 +517,7 @@ function Krowi_OptionsWindowMixin:OnNavScrollBarShown(shown)
     self:ReloadSection() -- the page is wider or narrower, so its notes are measured again
 end
 
-function Krowi_OptionsWindowMixin:EndFill()
+function WindowMixin:EndFill()
     self.Filling = nil
     if self.LayoutPending then
         self.LayoutPending = nil
@@ -488,12 +526,12 @@ function Krowi_OptionsWindowMixin:EndFill()
 end
 
 -- A row's width: the page's scroll box (pageInsets) without its rows' left padding
-function Krowi_OptionsWindowMixin:PageWidth()
+function WindowMixin:PageWidth()
     return self:GetWidth() - (bodyInsets.Left - bodyInsets.Right) - self:NavEnd() - (self.PaneCollapsed and stripWidth or helpWidth)
         - pageInsets.Left - pageInsets.Right - pageInsets.Pad
 end
 
-function Krowi_OptionsWindowMixin:Layout()
+function WindowMixin:Layout()
     local body = self.Body
     local right = self.PaneCollapsed and stripWidth or helpWidth
     local navEnd = self:NavEnd()
@@ -588,7 +626,7 @@ function Krowi_OptionsWindowMixin:Layout()
     self.ReloadButton:SetPoint("LEFT", self.ReloadText, "RIGHT", 12, 0)
 end
 
-function Krowi_OptionsWindowMixin:SetPaneCollapsed(collapsed)
+function WindowMixin:SetPaneCollapsed(collapsed)
     self.PaneCollapsed = collapsed
     lib.SetShared("PaneCollapsed", collapsed)
     self:ApplyWidth(true) -- "How it works" widens the window to the right
@@ -600,7 +638,7 @@ end
 -- button laid over ours along
 local shownEvents = { "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "UI_SCALE_CHANGED", "DISPLAY_SIZE_CHANGED" }
 
-function Krowi_OptionsWindowMixin:OnShow()
+function WindowMixin:OnShow()
     PlaySound(SOUNDKIT.IG_CHARACTER_INFO_OPEN)
     for _, event in ipairs(shownEvents) do self:RegisterEvent(event) end
     self:ApplyWidth(true) -- the scale or resolution may have changed while the window was hidden
@@ -610,13 +648,14 @@ end
 
 -- A key capture ends with the window, at the start of combat, when another key button starts one and when its row is
 -- reused
-function Krowi_OptionsWindowMixin:EndKeyCaptures()
+function WindowMixin:EndKeyCaptures()
     self.PageScrollBox:ForEachFrame(function(frame)
-        if frame.EndKeyCapture then frame:EndKeyCapture() end
+        local row = frame.Row
+        if row and row.EndKeyCapture then row:EndKeyCapture() end
     end)
 end
 
-function Krowi_OptionsWindowMixin:OnHide()
+function WindowMixin:OnHide()
     PlaySound(SOUNDKIT.IG_CHARACTER_INFO_CLOSE)
     for _, event in ipairs(shownEvents) do self:UnregisterEvent(event) end
     self:EndKeyCaptures()
@@ -626,49 +665,51 @@ function Krowi_OptionsWindowMixin:OnHide()
 end
 
 -- PLAYER_REGEN_DISABLED runs just before the lockdown starts, so InCombatLockdown() is still false inside it
-function Krowi_OptionsWindowMixin:OnEvent(event)
+function WindowMixin:OnEvent(event)
     if event == "UI_SCALE_CHANGED" or event == "DISPLAY_SIZE_CHANGED" then
         self:ApplyWidth(true) -- the screen may have room for the whole window now, or no longer
         self:UpdateShowMe()
         return
     end
+    -- The flag holds for this refresh only, also when an option errors in it; a key row's error while its capture ends
+    -- still lets the page refresh into combat
     self.CombatStarting = event == "PLAYER_REGEN_DISABLED"
-    if self.CombatStarting then self:EndKeyCaptures() end
-    self:Refresh()
+    if self.CombatStarting then xpcall(function() self:EndKeyCaptures() end, CallErrorHandler) end
+    xpcall(function() self:Refresh() end, CallErrorHandler)
     self.CombatStarting = nil
 end
 
-function Krowi_OptionsWindowMixin:InCombat()
+function WindowMixin:InCombat()
     return self.CombatStarting or InCombatLockdown()
 end
 
-function Krowi_OptionsWindowMixin:OnSizeChanged()
+function WindowMixin:OnSizeChanged()
     if self:IsShown() then self:UpdateShowMe() end -- also when the screen clamps the window
 end
 
-function Krowi_OptionsWindowMixin:OnDragStart()
+function WindowMixin:OnDragStart()
     self:StartMoving()
 end
 
-function Krowi_OptionsWindowMixin:OnDragStop()
+function WindowMixin:OnDragStop()
     self:StopMovingOrSizing()
     self:SavePoint()
     self:UpdateShowMe() -- a secure Show me button placed over ours follows it
 end
 
-function Krowi_OptionsWindowMixin:SavePoint()
+function WindowMixin:SavePoint()
     local point, _, relativePoint, x, y = self:GetPoint(1)
     lib.SetShared("Point", { point, relativePoint, x, y })
 end
 
 -- On the open tab, or the first one before any is open
-function Krowi_OptionsWindowMixin:Open(sectionId)
+function WindowMixin:Open(sectionId)
     self:ShowTab(self.Tab or lib.Tabs[1], sectionId)
 end
 
 -- [[ Navigation and the page ]] --
 -- The header bars take turns over Blizzard's three, as the game's list does (Blizzard_CategoryList.lua)
-function Krowi_OptionsWindowMixin:RefreshNav()
+function WindowMixin:RefreshNav()
     local config = self.Config
     local list = { { Kind = "NavButton", Id = "overview", Text = self.Strings.Overview, IsNew = false } }
     for i, group in ipairs(config.Groups) do
@@ -683,16 +724,15 @@ end
 
 -- A section's rows as drawn (Search.lua): grids, tab lists and cards as several rows, hidden options left out
 local function Flatten(elements)
-    return lib.Flatten(elements, rowTemplates)
+    return lib.Flatten(elements, rowKinds)
 end
 
 -- keepSearchText: a search ended by emptying the box keeps the spaces left in it
-function Krowi_OptionsWindowMixin:ShowSection(id, optionId, keepSearchText)
+function WindowMixin:ShowSection(id, optionId, keepSearchText)
     local config = self.Config
     self.SectionId = id
     self.Searching = nil
     self.Confirming = nil
-    self.Saved.LastSection = id
     if not keepSearchText and self.SearchBox:GetText() ~= "" then self.SearchBox:SetText("") end
     config.OnSectionShown(id)
     self.PageTitle:SetText(id == "overview" and self.Strings.Overview or config.SectionName(id))
@@ -700,6 +740,8 @@ function Krowi_OptionsWindowMixin:ShowSection(id, optionId, keepSearchText)
     self.Filling = true
     self:RefreshNav()
     self:FillPage(ScrollBoxConstants.DiscardScrollPosition)
+    -- Once the page is filled: a section whose elements error is not opened again on the next open
+    self.Saved.LastSection = id
     self:ShowSectionHelp()
     self:EndFill()
     if optionId then self:ScrollToOption(optionId) end
@@ -710,13 +752,13 @@ local function Signature(elements)
     local parts = {}
     for i, element in ipairs(elements) do
         local option = element.Option or (element.Item and element.Item.Show)
-        local with = element.With and not element.With:IsHidden() and ("+" .. element.With.Id) or "" -- shown with its row
+        local with = element.With and not element.With:IsHidden() and ("+" .. (element.With.Id or "")) or "" -- shown with its row
         parts[i] = element.Kind .. ":" .. (option and ((option.Id or "") .. "|" .. option:GetLabel() .. with) or tostring(element.Key or element.Text or element.Label or ""))
     end
     return table.concat(parts, "\n")
 end
 
-function Krowi_OptionsWindowMixin:FillPage(scrollPosition, elements)
+function WindowMixin:FillPage(scrollPosition, elements)
     self.Elements = elements or Flatten(self.Config.GetElements(self.SectionId))
     self.Signature = Signature(self.Elements)
     self.PageScrollBox:SetDataProvider(CreateDataProvider(self.Elements), scrollPosition)
@@ -724,7 +766,7 @@ function Krowi_OptionsWindowMixin:FillPage(scrollPosition, elements)
 end
 
 -- Rebuilds the page in place, keeping the scroll position: after a change that can show or hide options
-function Krowi_OptionsWindowMixin:ReloadSection()
+function WindowMixin:ReloadSection()
     if not self:IsShown() or not self.SectionId then return end
     if self.Searching then
         self:OnSearch(self.SearchBox:GetText(), ScrollBoxConstants.RetainScrollPosition)
@@ -733,17 +775,26 @@ function Krowi_OptionsWindowMixin:ReloadSection()
     self:FillPage(ScrollBoxConstants.RetainScrollPosition)
 end
 
-function Krowi_OptionsWindowMixin:Refresh()
+-- A row whose option errors stops only itself: the error goes to the game's error handler with its stack (BugSack, or
+-- the game's error frame through CallErrorHandler, as Blizzard's own xpcalls do), and the other rows, the changed count
+-- and the reload bar still refresh. A closure rather than the game's xpcall(f, handler, ...): plain Lua 5.1's xpcall,
+-- which the headless tests run on, passes no arguments.
+local function RefreshRow(frame)
+    local row = frame.Row
+    if row and row.Refresh then
+        xpcall(function() row:Refresh() end, CallErrorHandler)
+    end
+end
+
+function WindowMixin:Refresh()
     if not self:IsShown() then return end
-    self.PageScrollBox:ForEachFrame(function(frame)
-        if frame.Refresh then frame:Refresh() end
-    end)
+    self.PageScrollBox:ForEachFrame(RefreshRow)
     self:RefreshFooter()
     self:UpdateShowMe()
 end
 
 -- The page's header: the section's changed count and Defaults, or while the window asks, the question with Yes and No
-function Krowi_OptionsWindowMixin:RefreshFooter()
+function WindowMixin:RefreshFooter()
     local confirming = self:ConfirmingHere()
     if not confirming then self.Confirming = nil end
     self.CancelButton:SetShown(confirming)
@@ -754,7 +805,7 @@ function Krowi_OptionsWindowMixin:RefreshFooter()
         self.ChangedText:SetPoint("LEFT", self.PageTitle, "LEFT")
         self.ChangedText:SetFontObject("GameFontHighlight")
         self.ChangedText:SetText(confirming.Text)
-        self.DefaultsButton:SetText(self.Strings.Yes or YES)
+        self.DefaultsButton:SetText(YES)
         FitButton(self.DefaultsButton)
         self.DefaultsButton:SetEnabled(true)
     else
@@ -778,22 +829,47 @@ end
 -- drag of a slider that changes its option on every step. Only a change that shows or hides rows rebuilds the page; the
 -- search results are found again for that, except after a slider, whose value shows or hides no row, so a drag does not
 -- search every section on each step.
-function Krowi_OptionsWindowMixin:OnOptionChanged(option)
+function WindowMixin:OnOptionChanged(option)
     if option and option.GetNeedsReload and option:GetNeedsReload() then self.ReloadPending = true end
     if not self.SectionId or self.Searching and option and option.Type == "range" then
         self:Refresh()
-        return
-    end
-    local elements = self.Searching and self:SearchElements(self.SearchBox:GetText()) or Flatten(self.Config.GetElements(self.SectionId))
-    if Signature(elements) ~= self.Signature then
-        self:FillPage(ScrollBoxConstants.RetainScrollPosition, elements)
-        self:UpdateShowMe()
     else
-        self:Refresh()
+        local elements = self.Searching and self:SearchElements(self.SearchBox:GetText()) or Flatten(self.Config.GetElements(self.SectionId))
+        if Signature(elements) ~= self.Signature then
+            self:FillPage(ScrollBoxConstants.RetainScrollPosition, elements)
+            self:UpdateShowMe()
+        else
+            self:Refresh()
+        end
     end
+    self:RefreshHover()
 end
 
-function Krowi_OptionsWindowMixin:ScrollToOption(optionId)
+-- Whether a row still shows an option: as its own or the one after its check box, as a grid's check box or a tab's
+local function RowShows(row, option)
+    if row.Option == option or row.With == option then return true end
+    local element = row.Element
+    if not element then return false end
+    if element.Item and element.Item.Show == option then return true end
+    for _, cell in ipairs(element.Cells or {}) do
+        if cell == option then return true end
+    end
+    return false
+end
+
+-- A change made under the mouse shows at once in the hovered row's help: its arrow's line comes or goes with it
+-- (docs/work/2026-11-04-krowi-options-library). Only that line follows the value, so the help is drawn again only when
+-- the option turns changed or back, not on every step of a slider's drag. A rebuilt page may have given the row another
+-- option; then it waits for the next enter.
+function WindowMixin:RefreshHover()
+    local row, option = self.HoverRow, self.HoverRowOption
+    if not row or not row:IsVisible() or not RowShows(row, option) then return end
+    if (option.IsChanged and option:IsChanged() or false) == self.HoverChanged then return end
+    self:HideTooltip()
+    self:OnRowEnter(option, row, self.HoverControlX)
+end
+
+function WindowMixin:ScrollToOption(optionId)
     for _, element in ipairs(self.Elements or {}) do
         if element.Option and element.Option.Id == optionId or element.With and element.With.Id == optionId then
             self.PageScrollBox:ScrollToElementData(element, ScrollBoxConstants.AlignCenter)
@@ -806,7 +882,7 @@ end
 -- Yes, with No and the question beside it. A StaticPopup would write the dialog into Blizzard's shared popup frames and
 -- list, where a Blizzard dialog shown at the same time (deleting an item, a summon, a battleground port) reads it and
 -- then runs its protected accept tainted. A question asked in the search results belongs to them.
-function Krowi_OptionsWindowMixin:AskConfirm(text, onYes)
+function WindowMixin:AskConfirm(text, onYes)
     if self.Searching then
         self.Confirming = { Search = true, Text = text, OnYes = onYes }
     elseif self.SectionId then
@@ -817,19 +893,19 @@ function Krowi_OptionsWindowMixin:AskConfirm(text, onYes)
     self:RefreshFooter()
 end
 
-function Krowi_OptionsWindowMixin:ConfirmingHere()
+function WindowMixin:ConfirmingHere()
     local confirming = self.Confirming
     if not confirming then return nil end
     if self.Searching then return confirming.Search and confirming or nil end
     return confirming.SectionId == self.SectionId and confirming or nil
 end
 
-function Krowi_OptionsWindowMixin:CancelConfirm()
+function WindowMixin:CancelConfirm()
     self.Confirming = nil
     self:RefreshFooter()
 end
 
-function Krowi_OptionsWindowMixin:OnDefaultsClick()
+function WindowMixin:OnDefaultsClick()
     local confirming = self:ConfirmingHere()
     if confirming then
         self.Confirming = nil
@@ -843,7 +919,7 @@ function Krowi_OptionsWindowMixin:OnDefaultsClick()
 end
 
 -- Config.ResetSection returns true when an option it set back needs a reload
-function Krowi_OptionsWindowMixin:ResetSection(id)
+function WindowMixin:ResetSection(id)
     if self.Config.ResetSection(id) then self.ReloadPending = true end
     self:ReloadSection()
 end
@@ -852,10 +928,10 @@ end
 -- The results as the game's Options window shows them (docs/work/2026-11-03-blizzard-search): the selected tab, or with
 -- "Search all tabs" ticked every tab under its addon's name; each section's name, which opens it, then its found rows,
 -- working as on its page, under the headings they stand under there
-function Krowi_OptionsWindowMixin:SearchElements(text)
+function WindowMixin:SearchElements(text)
     local everyTab = self.SearchEveryTab and #lib.Tabs > 1
     local list = {}
-    local broad = self.BroadSearch and self.Strings.SearchBroad ~= nil
+    local broad = self.BroadSearch
     for _, group in ipairs(lib.Search(text, everyTab, self.Tab, broad)) do
         local tab = group.Tab
         if everyTab then list[#list + 1] = { Kind = "Header", Text = tab.Config.TabName } end
@@ -878,7 +954,7 @@ end
 
 -- From the first letter, as the game's; an empty box goes back to the section. scrollPosition: the results found again
 -- after a change keep theirs, and a question asked in them stays
-function Krowi_OptionsWindowMixin:OnSearch(text, scrollPosition)
+function WindowMixin:OnSearch(text, scrollPosition)
     text = text and text:gsub("^%s+", ""):gsub("%s+$", "") or ""
     if text == "" then
         if self.Searching then self:ShowSection(self.SectionId, nil, true) end
@@ -894,19 +970,13 @@ function Krowi_OptionsWindowMixin:OnSearch(text, scrollPosition)
     self:EndFill()
 end
 
--- The strings of the addon a row belongs to: in a search of every tab, another addon's rows are on the page
-function Krowi_OptionsWindowMixin:StringsFor(element)
-    local tab = element and element.Tab
-    return tab and tab.Config.Strings or self.Strings
-end
-
 -- [[ The help pane, or the tooltip while the pane is collapsed ]] --
 local function TextBlock(text, font, gap)
     return { Kind = "HelpText", Text = text, Font = font, Gap = gap }
 end
 
 -- A help picture at its own size, smaller only where the screen is
-function Krowi_OptionsWindowMixin:ShowPicture(element)
+function WindowMixin:ShowPicture(element)
     local lightbox = self.Lightbox
     local scale = math.min(1, (UIParent:GetWidth() - 80) / element.Width, (UIParent:GetHeight() - 80) / element.Height)
     lightbox.Picture:SetTexture(element.Picture)
@@ -918,18 +988,18 @@ function Krowi_OptionsWindowMixin:ShowPicture(element)
     lightbox:Show()
 end
 
-function Krowi_OptionsWindowMixin:FillHelp(blocks)
+function WindowMixin:FillHelp(blocks)
     self.HelpScrollBox:SetDataProvider(CreateDataProvider(blocks), ScrollBoxConstants.DiscardScrollPosition)
 end
 
 -- The open pane's name after «: a click on it closes the pane too, as the strip's name opens it
-function Krowi_OptionsWindowMixin:SetKicker(text)
+function WindowMixin:SetKicker(text)
     local button = self.CollapseButton
     button.Label:SetText(text)
     button:SetHitRectInsets(0, -(button.Label:GetStringWidth() + 2), 0, 0)
 end
 
-function Krowi_OptionsWindowMixin:ShowSectionHelp()
+function WindowMixin:ShowSectionHelp()
     self.HoverOption = nil
     local help = self.Config.GetHelp(self.SectionId)
     self.Help = help
@@ -957,7 +1027,7 @@ function Krowi_OptionsWindowMixin:ShowSectionHelp()
 end
 
 -- While searching with no row under the mouse: what the search finds, and what the broad search adds
-function Krowi_OptionsWindowMixin:ShowSearchHelp()
+function WindowMixin:ShowSearchHelp()
     self.HoverOption = nil
     self.Help = nil -- no section's help is drawn, so Show me hides
     local strings = self.Strings
@@ -975,14 +1045,14 @@ end
 -- collapsed, the window hidden). In combat it releases its button itself and returns true: ours stays, greyed. It returns
 -- false when it cannot lay one over at all; then ours hides and help.ShowMeNote (a string or a function returning one)
 -- explains what to do instead.
-function Krowi_OptionsWindowMixin:ReleaseShowMe()
+function WindowMixin:ReleaseShowMe()
     if self.SecureHelp then
         self.SecureHelp.ShowMeSecure(nil)
         self.SecureHelp = nil
     end
 end
 
-function Krowi_OptionsWindowMixin:UpdateShowMe()
+function WindowMixin:UpdateShowMe()
     local help = self.Help
     local visible = self:IsShown() and not self.PaneCollapsed and not self.HoverOption and help and (help.ShowMe ~= nil or help.ShowMeSecure ~= nil)
     local secure = visible and help.ShowMeSecure and help or nil
@@ -1011,6 +1081,7 @@ function Krowi_OptionsWindowMixin:UpdateShowMe()
     self.ShowMeNote:SetShown(note ~= nil)
 end
 
+-- The option's description and lines, and whether it is changed (its undo arrow's line, which RefreshHover follows)
 local function OptionHelpLines(strings, option)
     local lines = {}
     local desc = option.GetDescription and option:GetDescription() or ""
@@ -1022,15 +1093,18 @@ local function OptionHelpLines(strings, option)
     end
     -- Each of the row's arrows before what it means
     if option.GetNeedsReload and option:GetNeedsReload() then lines[#lines + 1] = lib.Markup.Reload .. " " .. strings.NeedsReload end
-    if option.IsChanged and option:IsChanged() then lines[#lines + 1] = lib.Markup.Reset .. " " .. (strings.ResetToDefault or RESET_TO_DEFAULT) end
-    return desc, lines
+    local changed = option.IsChanged and option:IsChanged() or false
+    if changed then lines[#lines + 1] = lib.Markup.Reset .. " " .. RESET_TO_DEFAULT end
+    return desc, lines, changed
 end
 
 -- controlX: where the hovered control starts, from the row's left edge
-function Krowi_OptionsWindowMixin:OnRowEnter(option, row, controlX)
+function WindowMixin:OnRowEnter(option, row, controlX)
     if not option then return end
+    self.HoverRow, self.HoverRowOption, self.HoverControlX = row, option, controlX
     local element = row and row.Element
-    local desc, lines = OptionHelpLines(self:StringsFor(element), option)
+    local desc, lines, changed = OptionHelpLines(self.Strings, option)
+    self.HoverChanged = changed
     if self.PaneCollapsed then
         local tooltip = Krowi_Tooltip -- the addon's own tooltip, never GameTooltip (Krowi_Util creates it wherever KROWI_LIBMAN exists)
         -- Above the row, from 10 before its control, where the game's Options window shows a setting's tooltip
@@ -1055,7 +1129,8 @@ function Krowi_OptionsWindowMixin:OnRowEnter(option, row, controlX)
     self:UpdateShowMe()
 end
 
-function Krowi_OptionsWindowMixin:OnRowLeave()
+function WindowMixin:OnRowLeave()
+    self.HoverRow, self.HoverRowOption, self.HoverControlX, self.HoverChanged = nil, nil, nil, nil
     if self.PaneCollapsed then
         self:HideTooltip()
         return
@@ -1064,7 +1139,7 @@ function Krowi_OptionsWindowMixin:OnRowLeave()
     if self.Searching then self:ShowSearchHelp() else self:ShowSectionHelp() end
 end
 
-function Krowi_OptionsWindowMixin:HideTooltip()
+function WindowMixin:HideTooltip()
     if self.TooltipShown then
         self.TooltipShown:Hide()
         self.TooltipShown = nil
