@@ -21,6 +21,11 @@ For the second go, after the eight findings of [spec.md](spec.md). Each item is 
 ### From `/code-review` of the fixes (2026-11-05)
 27. A section whose `GetElements` errors leaves the window in its filling state until another section opens. `Filling` stays true, so the navigation's scroll bar no longer re-lays the page. `OnSectionShown` has already run (KAF marks the section as seen), and `SectionId` points at the broken section (`WindowMixin.lua`, `ShowSection`). C. This existed before the fixes; they only stopped the section from being saved as the last one.
 28. An option whose `GetLabel` errors stops the whole page, because the page signature reads every label before the rows are made (`WindowMixin.lua`, `Signature` in `FillPage` and `OnOptionChanged`). C. A row's own `Init` error is already contained: Blizzard runs the list's initializers through `secureexecuterange` (`ScrollBoxListView.lua:421`).
+30. **A smaller config contract** (raised by the KAF extraction session, 2026-11-05):
+    - With `CreateWindow`'s check, a minimal consumer such as Krowi_ExtendedVendorUI must pass no-op functions for `IsNew`, `Landing`, `OnSectionShown`, `GetHelp`, `ResetSection` and `ChangedCount`. KAF's `window-second-tab` scenario had to add them.
+    - Defaults would keep only `TabName`, `Saved`, `Groups`, `SectionName` and `GetElements` required: not new, the Overview, nothing, no help, nothing, and 0.
+    - That needs a guard or a default at each call site, and API wording in `Krowi_Options.lua`'s config comment.
+    - Krowi's call.
 29. `tab:GetSaved()`'s error is raised at level 2, the library's own caller (`GetFrame` or `ShowTab`), not the addon's line. The message names the tab, and BugSack's stack shows the addon. C. Minor.
 
 ## Hover
