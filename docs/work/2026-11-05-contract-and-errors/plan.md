@@ -53,5 +53,43 @@ Every minor stays 0 (2.0 unreleased).
 - **`SetShared` before the window exists** (Krowi_AchievementFilter's `window-second-tab` calls it) resolves the block the same way `GetFrame` does.
 - **The extra `xpcall` closures** run only on a player's action in the open window, so no background job allocates.
 
+## Where the build departed from the plan
+- **Two more review rounds of the fix itself.**
+  - The `/code-review` (high) of `a76abaf` found that finding the newest block called every addon's `Saved` unguarded, so one broken addon broke the window for all, and that several config calls (`SectionName`, `IsNew`, `Landing`, `ChangedCount`, help's `Blocks`) could still leave a fill unfinished. The fix, `d0a3130`, added `OtherSaved`, the anchor check, `Init` through `Protected`, `Ask` at every config and help call, and each part of a fill on its own.
+  - A second `/code-review` (medium), of that fix, found a `ShowMeNote` function that errored being handed to `SetText` by an `and ... or` idiom; a `ShowMeSecure` that errored never being let go; an erroring `Saved` reported on every change; and a `ResetSection` that errored hiding the reload bar. Fixed in `390b3b8`.
+  - Each finding first got a repro check that failed: 12b, 13d to 13f, 16g to 16k.
+- **Not taken from the reviews, with the reason:**
+  - a tab whose saved table appears only after the window is made is not compared (the spec's accepted case: open after `PLAYER_LOGIN`);
+  - the search's allocations per keystroke (only while the player types in the open window);
+  - a row's init error skipping the footer (Blizzard runs every row's init through `secureexecuterange`, `ScrollBoxListView.lua:421` live, `:407` classic, so it never escapes `SetDataProvider`).
+- **`library-globals` stays a load-time scenario;** the window's globals got a new live step, `library-globals-window`, after `open`.
+- **KAF's `Run-GameTests.ps1` verdict** counts FAIL lines, not differences from the headless run: `options`' `y-on-new-install` always differs.
+- **`Tests/README.md` is unchanged:** its options row names no single steps.
+- **The final in-game runs are the two-copy gate's:** each of its cases runs `options` and `escape` on Retail and `options` on Mists, through KAF's branch, with the code at `390b3b8`.
+
 ## Proof
-<filled in at the end>
+- **Repro:** `repro/repro.lua` 25 of 25 pass. Every check failed before its fix: 16 at `48d0803`, 5 at `a76abaf`, 4 at `d0a3130`. The review fixes' repro passes, #4b reading `saved.Window`.
+- **Checks:**
+  - syntax clean on the 18 files;
+  - `Find-DeprecatedApi.ps1` clean on live, classic and classic_titan;
+  - `krowi:taint-reviewer` on the diff: no hazard. Its one robustness note, an anchor name `SetPoint` refuses, is fixed in `d0a3130`.
+- **Krowi_AchievementFilter's branch:** lint 0 errors; all 17 headless suites green on both clients.
+- **In game, at `d0a3130`, 2026-11-05:**
+  - Retail `options` 98 passed, 0 failed, 1 skipped (`y-on-new-install`, headless only); `escape` 34 of 34;
+  - Mists `options` 98 passed, 0 failed, 1 skipped;
+  - BugGrabber clean on both;
+  - `window-second-tab`: `shared=both`, the whole block;
+  - `library-globals-window`: ClearButton, SearchIcon and Text under the window's name, and TitleBg on Mists, nothing else.
+- **Two copies:** <the gate's runs on Retail and Mists, below>
+
+## Backlog for 2.1 (the whole-library review, Krowi's scope of 2026-11-05)
+- The undo arrow resets a paired control but reports only the toggle, so a paired control that needs a reload does not light the reload bar.
+- A question asked on the overview cannot be answered (Defaults, its Yes, is hidden there).
+- A slider without a step only reaches its two ends; one with min equal to max divides by zero.
+- After a change the page keeps old element data when its row signature is the same (a link's `Detail`, a tab row's `Position`).
+- `With` on a non-toggle makes the row's own slider or button drive the `With`.
+- Closing the window during a search reruns the section on the hidden window.
+- Retail's named colour codes (`|cn...:`) are not stripped from the searched text.
+- A closure per row on each refresh.
+- The leftovers of 1.0's per-tab strings (`ApplyStrings` on every tab switch, guards on strings that are always set).
+- A window left shown after its last tab unregisters (tests only).
