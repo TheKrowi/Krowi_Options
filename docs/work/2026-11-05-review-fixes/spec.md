@@ -1,5 +1,5 @@
 # Spec: the 2.0 code review's findings #1, #2 and #4 to #9
-Intent: [intent.md](intent.md). Status: accepted
+Intent: [intent.md](intent.md). Status: done
 
 Line numbers are at `de2cb58`, the head of `feature/2026-11-04-normal-library` this branch starts from.
 

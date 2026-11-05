@@ -1,5 +1,5 @@
 # Intent: the 2.0 code review's findings #1, #2 and #4 to #9
-Author: Krowi (maintainer), from Claude's code review of Krowi_Options 2.0 (2026-11-04/05). Source: code review. Status: accepted
+Author: Krowi (maintainer), from Claude's code review of Krowi_Options 2.0 (2026-11-04/05). Source: code review. Status: done
 
 ## Problem
 The code review of Krowi_Options 2.0 (branch `feature/2026-11-04-normal-library`, PR #2, unreleased) ranked nine findings as "fix before 2.0 ships". #3 (`WindowFrame.lua` keeping `RowFrames.lua`'s pieces from load) is already fixed in `de2cb58`. The other eight:
