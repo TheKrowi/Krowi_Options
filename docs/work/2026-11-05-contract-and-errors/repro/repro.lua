@@ -375,5 +375,90 @@ Check("17", "a standalone install with no KROWI_LIBMAN loads nothing and raises 
     return #errors == 0, #errors == 0 and "every file silent" or ("errors in " .. table.concat(errors, ", "))
 end)
 
+-- [[ From the code review and the taint review of the fix (2026-11-05): the same requirements, further call sites ]] --
+Check("12b", "a saved anchor that is no anchor point is ignored, and every tab's OnCreated still runs", function()
+    local lib = LoadCopy()
+    local built = StandInWindows(lib)
+    local created = false
+    local tab = lib.CreateWindow(Config({ Saved = { Window = { Point = { "FOO", "BAR", 1, 2 }, Changed = 5 } },
+        OnCreated = function() created = true end }))
+    local ok, message = pcall(lib.GetFrame, tab)
+    local placed = built.Point and tostring(built.Point[1]) or "nowhere"
+    return ok and placed == "nowhere" and created, ("placed %s, OnCreated %s%s"):format(placed, created and "ran" or "skipped",
+        ok and "" or "; raised: " .. tostring(message))
+end)
+
+Check("13d", "another tab whose Saved errors leaves the window, its opening and its changes working", function()
+    local lib = LoadCopy()
+    StandInWindows(lib)
+    local good = {}
+    local opening = lib.CreateWindow(Config({ TabName = "A", Saved = good }))
+    lib.CreateWindow(Config({ TabName = "B", Saved = function() error("B's own Saved error") end }))
+    local opened, message = pcall(lib.GetFrame, opening)
+    local changed, changeMessage = pcall(lib.SetShared, "PaneCollapsed", true)
+    local written = type(good.Window) == "table" and good.Window.PaneCollapsed == true
+    return opened and changed and written and #handled >= 1, ("open %s, change %s, A's block %s, %d error(s) to the handler"):format(
+        opened and "fine" or ("raised: " .. tostring(message)), changed and "fine" or ("raised: " .. tostring(changeMessage)),
+        written and "written" or "not written", #handled)
+end)
+
+Check("13e", "a tab registered late whose Saved errors is still returned, with its OnCreated run", function()
+    local lib = LoadCopy()
+    StandInWindows(lib)
+    lib.GetFrame(lib.CreateWindow(Config({ TabName = "A" })))
+    local created = false
+    local ok, tab = pcall(lib.CreateWindow, Config({ TabName = "Late", Saved = function() error("Late's own Saved error") end,
+        OnCreated = function() created = true end }))
+    return ok and type(tab) == "table" and created, ("%s, OnCreated %s"):format(ok and "returned" or ("raised: " .. tostring(tab)),
+        created and "ran" or "skipped")
+end)
+
+-- The page's header as the window draws it, on stand-ins that measure what they hold
+local function Footer()
+    local text = { ClearAllPoints = Noop, SetPoint = Noop, SetFontObject = Noop, SetText = Noop, SetShown = Noop }
+    local function Plain() return { SetShown = Noop, SetEnabled = Noop, SetText = Noop } end
+    return {
+        CancelButton = Plain(), PageTitle = { SetShown = Noop, SetText = Noop }, ChangedText = text,
+        DefaultsButton = { SetText = Noop, SetEnabled = Noop, SetShown = Noop, SetWidth = Noop,
+            GetFontString = function() return { GetStringWidth = function() return 50 end } end },
+        ReloadBackground = Plain(), ReloadText = Plain(), ReloadButton = Plain(),
+        ConfirmingHere = function() return nil end, InCombat = function() return false end,
+        NavScrollBox = { SetDataProvider = Noop },
+    }
+end
+
+Check("16g", "a section opens and ends its fill when SectionName, IsNew or ChangedCount errors", function()
+    local lib = LoadCopy()
+    local lines, all = {}, true
+    for _, case in ipairs({
+        { "SectionName", { SectionName = function() error("SectionName's own error") end } },
+        { "IsNew", { IsNew = function() error("IsNew's own error") end } },
+        { "ChangedCount", { ChangedCount = function() error("ChangedCount's own error") end } },
+    }) do
+        handled = {}
+        local fields = Footer()
+        fields.RefreshNav, fields.RefreshFooter = lib.Mixins.Window.RefreshNav, lib.Mixins.Window.RefreshFooter
+        fields.Saved, fields.Config, fields.SectionId = {}, Config(case[2]), "first"
+        fields.EndFill = function(window) window.Filled = true end
+        fields.ShowSectionHelp = lib.Mixins.Window.ShowSectionHelp
+        local window = Window(lib, fields)
+        local ok, message = pcall(window.ShowSection, window, "first")
+        local clean = ok and window.Filled == true
+        all = all and clean
+        lines[#lines + 1] = ("%s: %s"):format(case[1], ok and (window.Filled and "opened" or "fill left open") or ("raised: " .. tostring(message)))
+    end
+    return all, table.concat(lines, "; ")
+end)
+
+Check("16h", "a tab whose Landing errors opens on the overview", function()
+    local lib = LoadCopy()
+    local shown
+    local tab = lib.CreateWindow(Config({ Landing = function() error("Landing's own error") end }))
+    local window = Window(lib, { Show = Noop, ReleaseShowMe = Noop, ApplyStrings = Noop,
+        ShowSection = function(_, id) shown = id end })
+    local ok, message = pcall(window.ShowTab, window, tab)
+    return ok and shown == "overview", ok and ("opened on " .. tostring(shown)) or ("raised: " .. tostring(message))
+end)
+
 print(failed == 0 and "every check passes" or ("%d check(s) fail"):format(failed))
 if failed > 0 then os.exit(1) end

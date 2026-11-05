@@ -78,8 +78,11 @@ lib.Markup = {
     may return it, and IsNew, ResetSection and ChangedCount never get it.
     Every text an addon hands the window, here and in its elements, is a plain string, never a secret value (12.x): the
     window compares, joins and measures them.
-    An addon's error in any of these functions goes to the game's error handler with its stack, and the window goes on
-    with what it got: a section that errors opens empty, a tab whose OnCreated errors leaves the other tabs alone.
+    An addon's error in any of these functions (Saved too, when another tab asks for the shared state), in GetHelp's
+    functions, or in an option's IsHidden or GetLabel while a page is read goes to the game's error handler with its
+    stack, and the window goes on with what it got: a section that errors opens empty, a tab whose OnCreated or Saved
+    errors leaves the other tabs alone. An option's error inside one of its own row's scripts (a click, a hover) is that
+    script's error, as any script's is.
     Open the window after PLAYER_LOGIN: a window made while the addons still load keeps the code of the copies loaded so
     far, and a load-on-demand addon finds the window as it was made.
     The public surface: lib.CreateWindow; a tab's Open, Toggle, IsShown, Refresh, GetFrame and GetSaved (Unregister is for
@@ -115,6 +118,13 @@ end
 
 function tab:GetSaved()
     return FindSaved(self) or error(("Krowi_Options: tab %q: config.Saved gave no table"):format(tostring(self.Config.TabName)), 2)
+end
+
+-- Another addon's saved table, asked for the shared state: an addon whose Saved errors is left out and its error goes to
+-- the error handler, so it never stops the window of the others
+local function OtherSaved(registered)
+    local ok, saved = Protected(FindSaved, registered)
+    return ok and saved or nil
 end
 
 function tab:GetFrame()
@@ -159,8 +169,12 @@ local function SortTabs()
 end
 
 -- [[ The window's shared state: saved.Window in every addon's table, the newest change winning ]] --
+-- SetPoint's anchor points; any other name would error in it
+local anchors = { TOPLEFT = true, TOP = true, TOPRIGHT = true, LEFT = true, CENTER = true, RIGHT = true, BOTTOMLEFT = true,
+    BOTTOM = true, BOTTOMRIGHT = true }
+
 local function IsPoint(point)
-    return type(point) == "table" and type(point[1]) == "string" and type(point[2]) == "string" and type(point[3]) == "number"
+    return type(point) == "table" and anchors[point[1]] == true and anchors[point[2]] == true and type(point[3]) == "number"
         and type(point[4]) == "number"
 end
 
@@ -198,7 +212,7 @@ local function Shared()
     if not lib.Shared then
         local newest
         for _, registered in ipairs(lib.Tabs) do
-            local window = ReadWindow(FindSaved(registered))
+            local window = ReadWindow(OtherSaved(registered))
             if window and (not newest or (window.Changed or 0) > (newest.Changed or 0)) then newest = window end
         end
         lib.Shared = newest or {}
@@ -210,7 +224,7 @@ end
 local function WriteShared()
     local window = Shared()
     for _, registered in ipairs(lib.Tabs) do
-        local saved = FindSaved(registered)
+        local saved = OtherSaved(registered)
         if saved then saved.Window = CopyWindow(window) end
     end
 end
@@ -259,7 +273,7 @@ function lib.CreateWindow(config)
     tinsert(lib.Tabs, registered)
     SortTabs()
     if lib.Frame then
-        local saved = FindSaved(registered)
+        local saved = OtherSaved(registered)
         if saved then saved.Window = CopyWindow(Shared()) end
         if config.OnCreated then Protected(config.OnCreated, lib.Frame) end
         lib.Frame:RefreshTabs()
@@ -316,7 +330,7 @@ function lib.GetFrame(opening)
         local window = Shared()
         local frame = lib.Build.Window()
         lib.Frame = frame
-        frame:Init(window)
+        Protected(frame.Init, frame, window) -- the checked block cannot make it fail; if it does, every tab still gets OnCreated
         WriteShared()
         local tabs = {}
         for i, registered in ipairs(lib.Tabs) do tabs[i] = registered end
