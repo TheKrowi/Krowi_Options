@@ -48,6 +48,12 @@ Every minor stays 0 (2.0 unreleased).
 - **KAF's tests read `Krowi_OptionsWindow`:** they fail on this branch until the KAF session switches them to `lib.WindowName`. The in-game run waits for that.
 - **The deploy:** one AddOns folder per client, and the KAF session's build is in the game with a pending test request (until 11:50). No deploy without Krowi's go.
 
+## In-game check (Krowi, 2026-11-05)
+Tonight, from a KAF worktree of this session's own, not the KAF extraction session's. The steps:
+- Start it from `feature/2026-11-04-options-strings` once that branch reads the window's name from `lib.WindowName` (the extraction session's change), so `/kaftest escape` and the `library-globals` step find the window.
+- Point `Libs/Krowi_Options` at this branch's head.
+- `Deploy.ps1 -WhatIf`, then deploy to Retail and Mists. That replaces the extraction session's build in the game, so tell it first.
+
 ## Departures
 - The reproduction's #9 check now catches the name `build.Window` passes to `CreateFrame`, building the window on stand-in frames. It used to read a string literal in the source, and the name is now `lib.WindowName`. It still fails on `de2cb58`'s `Krowi_OptionsWindow`.
 - The reproduction finds Krowi_Util from a worktree too.
