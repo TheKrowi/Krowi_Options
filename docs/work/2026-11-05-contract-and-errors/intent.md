@@ -1,5 +1,5 @@
 # Intent: 2.0's contract written down, its errors contained, and the shared window state in sync
-Author: Krowi (maintainer). Source: the whole-library review Krowi asked for before the 2.0 release (2026-11-05). Status: accepted (Krowi, 2026-11-05)
+Author: Krowi (maintainer). Source: the whole-library review Krowi asked for before the 2.0 release (2026-11-05). Status: done (accepted by Krowi, 2026-11-05)
 
 ## Problem
 2.0 is the first release other addons will embed. Once Krowi_AchievementFilter 105.0 ships it, old installs run whatever newer copy another addon brings, so the config, the element and option interfaces, the saved keys and the names can only grow from then on; changing them needs `Krowi_Options_3`. A review of the whole library at `48d0803`, by three reviewers (a fork of the release session, a fresh reviewer on another model that read no earlier findings, and `krowi:taint-reviewer`), found:

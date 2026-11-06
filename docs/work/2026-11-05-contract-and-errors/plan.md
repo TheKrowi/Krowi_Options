@@ -1,5 +1,5 @@
 # Plan: 2.0's contract written down, its errors contained, and the shared window state in sync
-Spec: [spec.md](spec.md). Status: approved (Krowi, in plan mode, 2026-11-05)
+Spec: [spec.md](spec.md). Status: done (approved by Krowi in plan mode, 2026-11-05)
 
 Branch `fix/2026-11-05-contract-and-errors`, from `main` at `48d0803`, in the worktree `.claude/worktrees/fix-2026-11-05-contract-and-errors`. Krowi_AchievementFilter's test side is on its own branch `test/2026-11-05-options-contract`. The two-copy gate (Krowi_ClaudeKit `docs/work/2026-11-05-two-copy-gate`) is proven on this work's merged result, before the 2.0 release.
 
@@ -65,7 +65,8 @@ Every minor stays 0 (2.0 unreleased).
 - **`library-globals` stays a load-time scenario;** the window's globals got a new live step, `library-globals-window`, after `open`.
 - **KAF's `Run-GameTests.ps1` verdict** counts FAIL lines, not differences from the headless run: `options`' `y-on-new-install` always differs.
 - **`Tests/README.md` is unchanged:** its options row names no single steps.
-- **The final in-game runs are the two-copy gate's:** each of its cases runs `options` and `escape` on Retail and `options` on Mists, through KAF's branch, with the code at `390b3b8`.
+- **The final in-game runs are the two-copy gate's,** through KAF's branch with the code at `390b3b8`: the full `options` and `escape` with equal copies, and the smoke of `options` plus `escape` in the mixes (Krowi, 2026-11-05: "Full in equal, smoke elsewhere"). On Mists, `escape` runs too.
+- **`main`'s gate-log enrollment (#3) is merged into the branch,** and both work folders the branch changes got a `gates.md`. The merge changed only `CLAUDE.md`, so the code hash the two-copy records name is the same.
 
 ## Proof
 - **Repro:** `repro/repro.lua` 25 of 25 pass. Every check failed before its fix: 16 at `48d0803`, 5 at `a76abaf`, 4 at `d0a3130`. The review fixes' repro passes, #4b reading `saved.Window`.
@@ -80,7 +81,14 @@ Every minor stays 0 (2.0 unreleased).
   - BugGrabber clean on both;
   - `window-second-tab`: `shared=both`, the whole block;
   - `library-globals-window`: ClearButton, SearchIcon and Text under the window's name, and TitleBg on Mists, nothing else.
-- **Two copies:** <the gate's runs on Retail and Mists, below>
+- **Two copies, 2026-11-06** (Krowi_ClaudeKit's `Test-TwoCopies.ps1`, through Krowi_AchievementFilter's branch, code hash of `390b3b8`): every case passed on both clients.
+  - **Cases:** equal, all raised, and the two halves. No old/new pair: 1.0 registered `Krowi_Options_1`, which never mixes with `_2`.
+  - **Suites:** `options` in full and `escape` with equal copies; the smoke of `options` and `escape` in the three mixes (Krowi, 2026-11-05).
+  - **Retail:** `options` 98 passed and 0 failed in full, 48 and 0 in each smoke; `escape` 34 of 34 in every case.
+  - **Mists:** `options` 98 and 0 in full, 48 and 0 in each smoke; `escape` 33 of 34 in every case, the one skipped Retail-only.
+  - **Every case:** the second copy loaded, every registration on the minor the case expects (the kit's probe addon), and no BugGrabber row naming Krowi_Options.
+  - **The mutation** `lib.Tabs = {}` in the second copy, all raised, on Retail (2026-11-05): the case failed, as it should, with 11 `options` FAILs, 5 `escape` FAILs and a BugGrabber row from `WindowMixin.lua:1174`.
+  - **The release preflight** now shows the gate as OK ("equal, all-raised, half-a, half-b passed on Classic, Retail for this code"), with the static check clean. Before the runs it failed there.
 
 ## Backlog for 2.1 (the whole-library review, Krowi's scope of 2026-11-05)
 - The undo arrow resets a paired control but reports only the toggle, so a paired control that needs a reload does not light the reload bar.

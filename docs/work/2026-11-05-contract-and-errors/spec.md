@@ -1,5 +1,5 @@
 # Spec: 2.0's contract written down, its errors contained, and the shared window state in sync
-Intent: [intent.md](intent.md). Status: accepted (Krowi, 2026-11-05)
+Intent: [intent.md](intent.md). Status: done (accepted by Krowi, 2026-11-05)
 
 Line numbers are at `48d0803`.
 
