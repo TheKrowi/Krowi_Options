@@ -214,6 +214,26 @@ function h.Called(frame, method, value)
     return false
 end
 
+-- The calls a recorded frame got to one method, oldest first, each as the list of its arguments
+function h.CallsTo(frame, method)
+    local calls = {}
+    for _, call in ipairs(log) do
+        if call.Frame == frame and call.Method == method then calls[#calls + 1] = call.Args end
+    end
+    return calls
+end
+
+-- The function a recorded frame was last given for a script (SetScript or HookScript), or nil
+function h.ScriptOf(frame, script)
+    local found
+    for _, call in ipairs(log) do
+        if call.Frame == frame and (call.Method == "SetScript" or call.Method == "HookScript") and call.Args[1] == script then
+            found = call.Args[2]
+        end
+    end
+    return found
+end
+
 -- Frames for the builders: CreateFrame and Blizzard's mixins as recorders
 function h.RecordFrames()
     log = {}
