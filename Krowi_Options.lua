@@ -29,10 +29,11 @@ if not lib then return end
 -- file that writes into it makes it as here: it is added to, never replaced.
 lib.Internal = lib.Internal or {}
 -- The registered tabs, sorted by name, and the one window they share (lib.Internal.Frame, made on the first open). Both
--- live on lib, which a newer copy of the library keeps.
+-- live on lib.Internal, which a newer copy of the library keeps.
 lib.Internal.Tabs = lib.Internal.Tabs or {}
--- The tabs' methods (below), the rows' and the window's mixins (RowMixins.lua, WindowMixin.lua) and their builders
--- (RowFrames.lua, WindowFrame.lua)
+-- The tabs' methods (below), the rows' and the window's mixins (RowMixins.lua; WindowMixin.lua and its parts,
+-- WindowHelp.lua, WindowSearch.lua, WindowPage.lua and WindowLayout.lua) and their builders (RowFrames.lua,
+-- WindowFrame.lua)
 lib.Internal.Mixins = lib.Internal.Mixins or {}
 lib.Internal.Build = lib.Internal.Build or {}
 -- The window's frame name, the library's only global (Blizzard's templates name a few children after it, CLAUDE.md),
@@ -74,7 +75,7 @@ lib.Markup = {
                                    and the window comes back
                       CanShowMe()  false while the feature cannot be shown yet (its data still loading)
                       ShowMeSecure(button, close)  for a feature that needs a secure button laid over Show me
-                                   (WindowMixin.lua, ReleaseShowMe); called with nil to let it go
+                                   (WindowHelp.lua, ReleaseShowMe); called with nil to let it go
                       ShowMeNote   a string, or a function returning one, shown where Show me cannot be
     ResetSection(id), ChangedCount(id)
     OnCreated(frame) called once per tab: when the window is made, or when the tab registers after that. frame.Lightbox
@@ -91,12 +92,15 @@ lib.Markup = {
     Open the window after PLAYER_LOGIN: a window made while the addons still load keeps the code of the copies loaded so
     far, and a load-on-demand addon finds the window as it was made.
     The public surface: lib.CreateWindow; a tab's Open, Toggle, IsShown, Refresh, GetFrame and GetSaved (Unregister is for
-    tests); lib.GetStrings, lib.Markup and lib.WindowName; OnCreated's frame and its Lightbox. Everything else on lib and
-    on the window is internal and can change in any version.
+    tests); lib.GetStrings, lib.Markup and lib.WindowName; OnCreated's frame and its Lightbox. Everything else is
+    internal and can change in any version: the library's own names, all under lib.Internal, and the window's fields
+    and methods. Besides the public names, lib holds only lib.Internal, what LibMan puts on a library (Name, Version,
+    Localization and the phrases, L) and the submodules LibMan hangs on it under their names
+    (Tests/headless/suites/Structure.lua, S6).
 ]]
 
--- The tabs' methods, kept on lib: an addon registers its tab while it loads, before a later addon's newer copy of this
--- file runs, and that copy's methods replace these on the table every tab's metatable is
+-- The tabs' methods, kept on lib.Internal: an addon registers its tab while it loads, before a later addon's newer copy
+-- of this file runs, and that copy's methods replace these on the table every tab's metatable is
 lib.Internal.Mixins.Tab = lib.Internal.Mixins.Tab or {}
 local tab = lib.Internal.Mixins.Tab
 tab.__index = tab
@@ -214,8 +218,8 @@ local function CopyWindow(window)
 end
 
 -- The state the window shows: on its first need the newest block among the tabs' tables (one without a change time
--- counts as the oldest), afterwards the one the window keeps (lib.Internal.Shared). Kept on lib, which a newer copy of
--- this file keeps.
+-- counts as the oldest), afterwards the one the window keeps (lib.Internal.Shared). Kept on lib.Internal, which a newer
+-- copy of this file keeps.
 local function Shared()
     if not lib.Internal.Shared then
         local newest

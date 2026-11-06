@@ -37,6 +37,9 @@
 -- Krowi_AchievementFilter #197).
 -- RowFrames.lua builds each row and applies its mixin, kept on lib.Internal.Mixins rather than as a global, so the
 -- newest copy of the library decides.
+-- The element kinds and the option interface above are the contract (Krowi_Options.lua's header says what else is
+-- public). Everything else this file defines (the mixins, RowGeometry, RowX and the Card functions) is internal, under
+-- lib.Internal, and can change in any version.
 
 -- A standalone install loaded before any Krowi addon has no KROWI_LIBMAN and nothing to serve (Krowi_Options.lua)
 if not KROWI_LIBMAN then return end

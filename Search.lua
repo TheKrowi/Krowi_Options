@@ -13,7 +13,8 @@
 
 -- A standalone install loaded before any Krowi addon has no KROWI_LIBMAN and nothing to serve (Krowi_Options.lua)
 if not KROWI_LIBMAN then return end
--- Not "Search": LibMan hangs the submodule on lib under its name, where lib.Internal.Search is the search below
+-- Not "Search": LibMan hangs the submodule on lib under its name, where it would read as the search below
+-- (lib.Internal.Search)
 local sub, lib = KROWI_LIBMAN:NewSubmodule("SearchModule", 0)
 if not sub then return end
 

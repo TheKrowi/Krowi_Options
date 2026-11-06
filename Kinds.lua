@@ -15,7 +15,7 @@
 --                 game's search tags a setting (Blizzard_SettingControls.lua); a kind without Names is not searched
 --   Descriptions  function(element): the texts the broad search finds it by too
 --   Options       function(element): the option the row stands for and the one beside it (an option's With), which the
---                 page's signature and the hovered row's help follow (WindowMixin.lua)
+--                 page's signature (WindowPage.lua) and the hovered row's help (WindowHelp.lua) follow
 --   Cells         function(element): the options in a grid row's check boxes
 --   Search       where a row stands for the search (Search.lua): Heading (1 for a heading that also ends the indents and
 --                 the grid above it, 2 for one that does not), Indented (it hangs under its option's parent or the row
@@ -28,7 +28,8 @@
 
 -- A standalone install loaded before any Krowi addon has no KROWI_LIBMAN and nothing to serve (Krowi_Options.lua)
 if not KROWI_LIBMAN then return end
--- Not "Kinds": LibMan hangs the submodule on lib under its name, where lib.Internal.Kinds is the table of kinds below
+-- Not "Kinds": LibMan hangs the submodule on lib under its name, where it would read as the table of kinds below
+-- (lib.Internal.Kinds)
 local sub, lib = KROWI_LIBMAN:NewSubmodule("ElementKinds", 0)
 if not sub then return end
 
@@ -184,7 +185,9 @@ end
 -- plain frame, and the row of the element's kind hangs on it as frame.Row, from a pool per kind; when the list lets the
 -- frame go, its row goes back (docs/work/2026-11-04-krowi-options-library). Code that walks a list's frames reads
 -- frame.Row. listKinds: lib.Internal.Kinds for the page, or a table in its shape (Build, Height) for the window's other
--- lists (WindowMixin.lua); leftPad and spacing as CreateScrollBoxListLinearView takes them.
+-- lists (the navigation's in WindowLayout.lua, the help pane's in WindowHelp.lua); leftPad and spacing as
+-- CreateScrollBoxListLinearView takes them. A row has no height of its own (RowFrames.lua, Row): it is set to all of
+-- its frame, which the list sizes by listKinds' Height.
 function lib.Internal.InitList(window, scrollBox, scrollBar, listKinds, leftPad, spacing)
     local free = {} -- per kind, the rows not hung on a frame
     local function Release(host)

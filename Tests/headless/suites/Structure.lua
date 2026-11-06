@@ -10,8 +10,8 @@
 -- by running it, it holds what the library offers, not which file defines it:
 --   S1  the names on each of lib.Internal.Mixins' tables and on lib.Internal.Build: a method lost in a move shows as
 --       missing
---   S2  lib.Internal.Search on the test addon's fixture tab (Tests/Krowi_OptionsTests/Tests/Fixtures.lua) and its second
---       tab, and the page the window makes of it (SearchElements)
+--   S2  lib.Internal.Search on the test addon's fixture tab (Tests/Krowi_OptionsTests/Tests/Fixtures.lua) and its
+--       second tab, and the page the window makes of it (SearchElements)
 --   S3  each section's page signature, as the window's FillPage computes it
 --   S4  two copies mixed (h.LoadCopy): every window method recorded in S1 is still there
 --   S5  no file keeps another file's field in a local at load (CLAUDE.md, Versioning): the kit's static two-copy check
@@ -422,7 +422,7 @@ Option: Reset everything]])
 WindowSearch("zzz", false, false, "Note: Nothing found.")
 
 -- [[ S3: the page signatures ]] --
--- What the window compares after a change to tell whether the page keeps its rows (WindowMixin.lua, Signature), on a
+-- What the window compares after a change to tell whether the page keeps its rows (WindowPage.lua, Signature), on a
 -- stand-in window whose FillPage reads the section as the real one does; a line per row
 local function Signature(id, sectionId, title, prepare, recorded)
     Snapshot("S3." .. id, title, function()
@@ -608,14 +608,14 @@ Scenario("S4c", "a full copy, then a copy whose only newer file is WindowMixin.l
 })
 
 -- [[ S5: no load-time captures ]] --
--- The kit's Find-LoadTimeCaptures (skills/release/TwoCopy.ps1) in Lua, on the column-0 statements of the files: the names
--- a file binds to the library (its registration's locals, file-level aliases such as
+-- The kit's Find-LoadTimeCaptures (skills/release/TwoCopy.ps1) in Lua, on the column-0 statements of the files: the
+-- names a file binds to the library (its registration's locals, file-level aliases such as
 -- `local build = lib.Internal.Build`), the fields each file defines (`function build.Finish(`) or assigns
--- (`lib.Internal.Mixins.Row = RowMixin`), and the file-level locals that take a field (`local Finish = build.Finish`, one
--- of several in `local a, Finish = 0, build.Finish`, or `Finish = build.Finish` into a local declared before). A local
--- fails when another file defines or replaces that field: with copies mixed it keeps the older copy's. A field only ever
--- set as `X = X or {}` (lib.Internal and its Mixins, Build and Tabs) is fine, since every copy fills the same table. Not
--- seen, as in the kit: a capture in an indented line.
+-- (`lib.Internal.Mixins.Row = RowMixin`), and the file-level locals that take a field (`local Finish = build.Finish`,
+-- one of several in `local a, Finish = 0, build.Finish`, or `Finish = build.Finish` into a local declared before). A
+-- local fails when another file defines or replaces that field: with copies mixed it keeps the older copy's. A field
+-- only ever set as `X = X or {}` (lib.Internal and its Mixins, Build and Tabs) is fine, since every copy fills the same
+-- table. Not seen, as in the kit: a capture in an indented line.
 local registrars = { KROWI_LIBMAN = true, LibStub = true }
 local registrations = { NewLibrary = true, NewSubmodule = true, GetCurrentLibrary = true }
 

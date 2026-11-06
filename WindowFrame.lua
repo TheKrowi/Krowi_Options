@@ -90,7 +90,8 @@ local function PanelButton(parent, width, hidden)
     return button
 end
 
--- The help pane's chevrons; WindowMixin.lua sets their text and the pane's name
+-- The help pane's chevrons; WindowLayout.lua sets their arrows, WindowMixin.lua (ApplyStrings) and WindowHelp.lua
+-- (SetKicker) the pane's name beside them
 local function PaneButton(parent, width, arrowPoint, arrowY)
     local button = CreateFrame("Button", nil, parent)
     button:SetSize(width, 22)
@@ -100,12 +101,12 @@ local function PaneButton(parent, width, arrowPoint, arrowY)
 end
 
 -- The game's own Options frame (SettingsFrameTemplate: each client's border, title strip and background); Blizzard's
--- window is laid out in Blizzard_SettingsPanel.xml, which the anchors in WindowMixin.lua's Layout follow. Hidden before
--- its children are made, so the search box does not take the keyboard. Named lib.WindowName (Krowi_Options.lua).
+-- window is laid out in Blizzard_SettingsPanel.xml, which the anchors in WindowLayout.lua's Layout follow. Hidden
+-- before its children are made, so the search box does not take the keyboard. Named lib.WindowName (Krowi_Options.lua).
 function build.Window()
     local frame = CreateFrame("Frame", lib.WindowName, UIParent, "SettingsFrameTemplate")
     frame:Hide()
-    -- The width follows the help pane (WindowMixin.lua, ApplyWidth): the game's 920 plus the pane's 380
+    -- The width follows the help pane (WindowLayout.lua, ApplyWidth): the game's 920 plus the pane's 380
     frame:SetSize(1300, 720)
     frame:SetPoint("CENTER")
     frame:SetFrameStrata("HIGH")
@@ -131,7 +132,7 @@ function build.Window()
     frame.ReloadBackground:Hide()
 
     frame.Body = CreateFrame("Frame", nil, frame)
-    -- Where the game's window draws its inner frame (Blizzard_SettingsPanel.xml); WindowMixin.lua draws it in slices
+    -- Where the game's window draws its inner frame (Blizzard_SettingsPanel.xml); WindowLayout.lua draws it in slices
     frame.InnerFrame = CreateFrame("Frame", nil, frame)
     frame.InnerFrame:SetPoint("TOPLEFT", 17, -64)
     frame.InnerFrame:SetPoint("BOTTOMRIGHT", -17, 42)
@@ -150,7 +151,7 @@ function build.Window()
     -- The help pane hides behind a gold chevron and comes back from a strip reading "How it works" down its length, as in
     -- the mockup (docs/work/2026-10-25-options-revamp/mockup)
     frame.CollapseButton = PaneButton(frame, 22, "CENTER", 1)
-    -- The pane's name after the chevron; WindowMixin.lua's SetKicker widens the button's hit rect over it
+    -- The pane's name after the chevron; WindowHelp.lua's SetKicker widens the button's hit rect over it
     frame.CollapseButton.Label = Text(frame.CollapseButton, "ARTWORK", "GameFontDisableSmall", "LEFT")
     frame.CollapseButton.Label:SetPoint("LEFT", frame.CollapseButton, "RIGHT", 2, 0)
     frame.ExpandButton = PaneButton(frame, 26, "TOP", -2)
