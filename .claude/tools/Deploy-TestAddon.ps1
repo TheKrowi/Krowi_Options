@@ -150,9 +150,16 @@ foreach ($library in @([ordered]@{ Name = 'Krowi_Options'; Repo = $root }, [orde
 
 # --- 4. The same library into the other addons that embed one (-Consumers) --------------------------------------
 if ($Consumers) {
+    # Only an addon that embeds this library (Krowi_Options_2): a copy of 1.x (Krowi_Options_1) is left alone
     $others = @(Get-ChildItem -LiteralPath $addOns -Directory | Where-Object {
-        $_.Name -ne 'Krowi_OptionsTests' -and (Test-Path -LiteralPath (Join-Path $_.FullName 'Libs\Krowi_Options\Krowi_Options.lua')) })
+        $core = Join-Path $_.FullName 'Libs\Krowi_Options\Krowi_Options.lua'
+        $_.Name -ne 'Krowi_OptionsTests' -and (Test-Path -LiteralPath $core) -and
+            ([IO.File]::ReadAllText($core) -match "NewLibrary\('Krowi_Options_2'") })
     ""
+    foreach ($skipped in Get-ChildItem -LiteralPath $addOns -Directory | Where-Object {
+            $_.Name -ne 'Krowi_OptionsTests' -and (Test-Path -LiteralPath (Join-Path $_.FullName 'Libs\Krowi_Options\Krowi_Options.lua')) -and $others.Name -notcontains $_.Name }) {
+        "-Consumers: $($skipped.Name) embeds a Krowi_Options that is not 2.x: left alone"
+    }
     if ($others.Count -eq 0) { "-Consumers: no other addon in the $Client client embeds the library." }
     foreach ($other in $others) {
         "-Consumers: $($other.Name)"
