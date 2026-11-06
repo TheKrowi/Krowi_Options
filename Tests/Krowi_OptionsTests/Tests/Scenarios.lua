@@ -25,6 +25,13 @@ local function Lib()
     return KROWI_LIBMAN:GetLibrary("Krowi_Options_2")
 end
 
+-- The library's internals: lib.Internal, or lib itself on a copy from before they moved there (a consumer's older
+-- embedded copy can be the one under test)
+local function Internal(lib)
+    lib = lib or Lib()
+    return lib.Internal or lib
+end
+
 local function Join(list)
     return #list == 0 and "none" or table.concat(list, ",")
 end
@@ -36,7 +43,7 @@ end
 -- The window's tabs that this addon registered, in the registry's order (docs/work/2026-10-30-options-settings-look in KAF)
 local function TabNames(lib)
     local names = {}
-    for _, tab in ipairs(lib.Tabs) do
+    for _, tab in ipairs(Internal(lib).Tabs) do
         if IsFixtureTab(tab) then names[#names + 1] = tab.Config.TabName end
     end
     return Join(names)
@@ -59,14 +66,14 @@ local function SecondTab(lib)
     fixtures.SecondTab = tab
     local ok, line = pcall(function()
         local tabs = TabNames(lib)
-        lib.SetShared("TestShared", true)
+        Internal(lib).SetShared("TestShared", true)
         local main = fixtures.Tab:GetSaved()
         local mainBlock, secondBlock = main.Window or {}, saved.Window or {}
         local same = mainBlock.TestShared and secondBlock.TestShared and mainBlock.Changed == secondBlock.Changed and mainBlock ~= secondBlock
         local shared = same and "both" or ("main=" .. tostring(mainBlock.TestShared) .. ",second=" .. tostring(secondBlock.TestShared))
-        lib.SetShared("TestShared", nil)
-        local open = GroupNames(lib.Search("Tooltip", false, tab))
-        local all = GroupNames(lib.Search("Tooltip", true, tab))
+        Internal(lib).SetShared("TestShared", nil)
+        local open = GroupNames(Internal(lib).Search("Tooltip", false, tab))
+        local all = GroupNames(Internal(lib).Search("Tooltip", true, tab))
         return ("tabs=%s shared=%s open=%s all=%s"):format(tabs, shared, open, all)
     end)
     tab:Unregister()
@@ -81,11 +88,13 @@ end
 -- bar; the name's left at indent 0 and 1
 local rowControls = { "Toggle", "Range", "Select", "Execute", "Input", "Key", "Sub", "TabArrows" }
 local function RowGeometryLine(lib)
+    local internal = Internal(lib)
     local parts = {}
     for _, width in ipairs({ 635, 619 }) do
-        local flat, indented = lib.RowGeometry(0), lib.RowGeometry(1)
-        local line = { ("name %g/%g-%g"):format(lib.RowX(flat.NameLeft, width), lib.RowX(indented.NameLeft, width), lib.RowX(flat.NameRight, width)) }
-        for _, key in ipairs(rowControls) do line[#line + 1] = ("%s %g"):format(key, lib.RowX(flat[key], width)) end
+        local flat, indented = internal.RowGeometry(0), internal.RowGeometry(1)
+        local line = { ("name %g/%g-%g"):format(internal.RowX(flat.NameLeft, width), internal.RowX(indented.NameLeft, width),
+            internal.RowX(flat.NameRight, width)) }
+        for _, key in ipairs(rowControls) do line[#line + 1] = ("%s %g"):format(key, internal.RowX(flat[key], width)) end
         parts[#parts + 1] = ("column %d [%s]"):format(width, table.concat(line, " "))
     end
     return table.concat(parts, " ")
@@ -95,12 +104,13 @@ end
 -- help picture its picture area shows: a wide one (cut at its right) and a tall one (at its bottom), and a square whose
 -- own part is its bottom (Fixtures.lua's pictures, at the sizes of KAF's NewTabs and CategoryTree)
 local function CardGeometryLine(lib)
+    local internal = Internal(lib)
     local pictures = fixtures.Pictures
-    local parts = { ("width %g/%g"):format(lib.CardWidth(635), lib.CardWidth(619)) }
+    local parts = { ("width %g/%g"):format(internal.CardWidth(635), internal.CardWidth(619)) }
     for _, name in ipairs({ "Wide", "Tall" }) do
-        parts[#parts + 1] = ("%s %.5f,%.5f,%.5f,%.5f"):format(name, lib.CardCrop(pictures[name], lib.CardWidth(635)))
+        parts[#parts + 1] = ("%s %.5f,%.5f,%.5f,%.5f"):format(name, internal.CardCrop(pictures[name], internal.CardWidth(635)))
     end
-    parts[#parts + 1] = ("Bottom %.5f,%.5f,%.5f,%.5f"):format(lib.CardCrop(pictures.Square, lib.CardWidth(635)))
+    parts[#parts + 1] = ("Bottom %.5f,%.5f,%.5f,%.5f"):format(internal.CardCrop(pictures.Square, internal.CardWidth(635)))
     return table.concat(parts, " ")
 end
 
@@ -108,7 +118,7 @@ end
 -- "Section>Heading>Name", a row with no heading "Section>Name"
 local function SearchRows(text, broad)
     local rows = {}
-    for _, group in ipairs(Lib().Search(text, false, fixtures.Tab, broad)) do
+    for _, group in ipairs(Internal().Search(text, false, fixtures.Tab, broad)) do
         for _, section in ipairs(group.Sections) do
             for _, row in ipairs(section.Rows) do
                 local name = row.Option and row.Option:GetLabel() or row.Kind == "GridHeader" and "(columns)"
@@ -127,7 +137,7 @@ tests.Scenarios = {
     {Name = "window-tabs",
         Observe = function()
             local lib = Lib()
-            if not lib.Tabs then return "no tab registry" end
+            if not Internal(lib).Tabs then return "no tab registry" end
             return "tabs=" .. TabNames(lib)
         end,
         Recorded = "tabs=Options Test", -- KAF: "tabs=Achievement Filter"
@@ -137,7 +147,7 @@ tests.Scenarios = {
     {Name = "window-second-tab",
         Observe = function()
             local lib = Lib()
-            if not lib.Tabs then return "no tab registry" end
+            if not Internal(lib).Tabs then return "no tab registry" end
             return SecondTab(lib)
         end,
         -- KAF: "tabs=Achievement Filter,Zz Test shared=both open=Zz Test all=Achievement Filter,Zz Test after=Achievement Filter"
@@ -146,9 +156,9 @@ tests.Scenarios = {
     -- The game's Options window's sizes (docs/work/2026-11-02-options-widths): its width with the help pane added
     {Name = "window-width",
         Observe = function()
-            local lib = Lib()
-            if not lib.WindowWidth then return "resizable from 1000x560" end
-            return ("open=%d collapsed=%d"):format(lib.WindowWidth(false), lib.WindowWidth(true))
+            local internal = Internal()
+            if not internal.WindowWidth then return "resizable from 1000x560" end
+            return ("open=%d collapsed=%d"):format(internal.WindowWidth(false), internal.WindowWidth(true))
         end,
         Recorded = "open=1300 collapsed=950",
         Target = "open=1300 collapsed=950"},
@@ -173,7 +183,7 @@ tests.Scenarios = {
     {Name = "library-globals",
         Observe = function()
             local lib = Lib()
-            if lib.Frame then return nil, "the window is made already (a run since the last /reload): library-globals-window covers it" end
+            if Internal(lib).Frame then return nil, "the window is made already (a run since the last /reload): library-globals-window covers it" end
             local found = {}
             for name in next, _G do
                 if type(name) == "string" and name:find("^Krowi_Options") and name ~= lib.WindowName then
@@ -188,7 +198,7 @@ tests.Scenarios = {
     {Name = "row-geometry",
         Observe = function()
             local lib = Lib()
-            if not lib.RowGeometry then return "column 300 from the right, names from 16" end
+            if not Internal(lib).RowGeometry then return "column 300 from the right, names from 16" end
             return RowGeometryLine(lib)
         end,
         Recorded = "column 635 [name 16/36-293 Toggle 305 Range 305 Select 323.5 Execute 305 Input 311 Key 305 Sub 305 TabArrows 305]"
@@ -287,7 +297,7 @@ tests.Scenarios = {
     {Name = "card-geometry",
         Observe = function()
             local lib = Lib()
-            if not lib.CardWidth then return "no card helpers" end
+            if not Internal(lib).CardWidth then return "no card helpers" end
             return CardGeometryLine(lib)
         end,
         -- KAF: "width 203.667/198.333 NewTabs 0.00000,0.36838,0.00000,0.62500 CategoryTree 0.00000,0.71875,0.00000,0.15353 Bottom ..."

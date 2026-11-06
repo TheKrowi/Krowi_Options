@@ -15,13 +15,14 @@ local Noop, NIL, handled = h.Noop, h.NIL, h.handled
 local LoadCopy, Option, Config, Window = h.LoadCopy, h.Option, h.Config, h.Window
 local Recorder, RecordFrames, CallsTo, ScriptOf = h.Recorder, h.RecordFrames, h.CallsTo, h.ScriptOf
 local Scenario = h.Scenario
+local Internal = h.Internal -- the library's internals, lib.Internal
 
 -- [[ Stand-ins ]] --
 -- An option row as RowFrames.lua builds it, on recorders; its name measures as a real font string does
 local function OptionRow(lib)
     RecordFrames()
     CreateMinimalSliderFormatter = function() return Noop end
-    local row = lib.Build.OptionRow(Recorder())
+    local row = Internal(lib).Build.OptionRow(Recorder())
     row.Label.GetStringWidth = function() return 100 end
     row.Label.GetWidth = function() return 200 end
     return row
@@ -51,10 +52,10 @@ local function DrawingPage(lib, window)
         for i, element in ipairs(list) do
             local row
             if element.Kind == "Link" then
-                row = setmetatable({ Text = Region(), Detail = Region() }, { __index = lib.Mixins.LinkRow })
+                row = setmetatable({ Text = Region(), Detail = Region() }, { __index = Internal(lib).Mixins.LinkRow })
             elseif element.Kind == "TabRow" then
                 row = setmetatable({ Position = Region(), Label = Region(), Source = Region(), Up = Region(), Down = Region(),
-                    ShowCheck = Region() }, { __index = lib.Mixins.TabRow })
+                    ShowCheck = Region() }, { __index = Internal(lib).Mixins.TabRow })
             end
             if row then row:Init(element, window) end
             self.Frames[i] = { Row = row }
@@ -77,7 +78,7 @@ local function Footer(lib, shown)
         DefaultsButton = Button("Defaults"), CancelButton = Button("Cancel"), PageTitle = { SetShown = Noop, SetText = Noop },
         ChangedText = { ClearAllPoints = Noop, SetPoint = Noop, SetFontObject = Noop, SetText = Noop },
         ReloadBackground = Button("ReloadBackground"), ReloadText = Button("ReloadText"), ReloadButton = Button("Reload"),
-        InCombat = function() return false end, RefreshFooter = lib.Mixins.Window.RefreshFooter,
+        InCombat = function() return false end, RefreshFooter = Internal(lib).Mixins.Window.RefreshFooter,
     }
 end
 
@@ -287,7 +288,7 @@ Scenario("B7", "the search finds the name inside a named colour code (|cnHIGHLIG
             return { { Kind = "Option", Option = Option("|cnHIGHLIGHT_FONT_COLOR:Bright|r") } }
         end }))
         local function Found(text)
-            local result = lib.Search(text, true, nil, false)
+            local result = Internal(lib).Search(text, true, nil, false)
             return result[1] and #result[1].Sections[1].Rows or 0
         end
         return ("highlight finds %d row(s), bright %d"):format(Found("highlight"), Found("bright"))
@@ -352,10 +353,10 @@ Scenario("B10", "a window stays shown after its last tab unregisters", {
         end
         local tab = lib.CreateWindow(Config())
         local visible = true
-        local window = Window(lib, { TabButtons = {}, UpdateSearchAll = Noop, RefreshTabs = lib.Mixins.Window.RefreshTabs,
+        local window = Window(lib, { TabButtons = {}, UpdateSearchAll = Noop, RefreshTabs = Internal(lib).Mixins.Window.RefreshTabs,
             IsShown = function() return visible end, Show = function() visible = true end, Hide = function() visible = false end })
         window.Tab = tab
-        lib.Frame = window
+        Internal(lib).Frame = window
         tab:Unregister()
         return visible and "left shown" or "hidden"
     end,
@@ -436,7 +437,7 @@ Scenario("B13", "text typed in an input box is dropped when the box loses focus;
 local function BrokenSection()
     local lib = LoadCopy()
     local shownFor = {}
-    local window = Window(lib, { Saved = {}, EndFill = lib.Mixins.Window.EndFill, Config = Config({
+    local window = Window(lib, { Saved = {}, EndFill = Internal(lib).Mixins.Window.EndFill, Config = Config({
         OnSectionShown = function(id) shownFor[#shownFor + 1] = id end,
         GetElements = function(id)
             if id == "broken" then error("broken's own error") end
@@ -498,7 +499,7 @@ Scenario("B15b", "a tab without a saved table: tab:Open() on a window already ma
     Observe = function()
         local lib = LoadCopy()
         local tab = lib.CreateWindow(Config({ TabName = "Broken", Saved = function() return nil end }))
-        lib.Frame = Window(lib, { Show = Noop, ShowSection = Noop })
+        Internal(lib).Frame = Window(lib, { Show = Noop, ShowSection = Noop })
         return ErrorChunk(lib, tab, "tab:Open()")
     end,
     Recorded = "the error points at WindowMixin.lua",
@@ -521,7 +522,7 @@ Scenario("B15c", "a tab without a saved table: the addon's own tab:GetSaved() er
 local optional = {
     { "B16a", "IsNew", "no section marked New", function(lib, tab)
         local list
-        local window = Window(lib, { Config = tab.Config, RefreshNav = lib.Mixins.Window.RefreshNav,
+        local window = Window(lib, { Config = tab.Config, RefreshNav = Internal(lib).Mixins.Window.RefreshNav,
             NavScrollBox = { SetDataProvider = function(_, given) list = given end } })
         window:RefreshNav()
         local new = 0
@@ -540,7 +541,7 @@ local optional = {
         return window.Filled and "the section opens" or "the fill did not end"
     end },
     { "B16d", "GetHelp", "no help", function(lib, tab)
-        local window = Window(lib, { Config = tab.Config, SectionId = "first", ShowSectionHelp = lib.Mixins.Window.ShowSectionHelp })
+        local window = Window(lib, { Config = tab.Config, SectionId = "first", ShowSectionHelp = Internal(lib).Mixins.Window.ShowSectionHelp })
         window:ShowSectionHelp()
         return window.Help == nil and "no help" or "help"
     end },

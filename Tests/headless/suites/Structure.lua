@@ -8,16 +8,19 @@
 -- The safety net of phase 2 of docs/work/2026-11-06-finish-2-0 (plan.md, step 0), which splits WindowMixin.lua and moves
 -- the code of each element kind into a table of kinds without changing behaviour. Recorded on the code before the split,
 -- by running it, it holds what the library offers, not which file defines it:
---   S1  the names on each of lib.Mixins' tables and on lib.Build: a method lost in a move shows as missing
---   S2  lib.Search on the test addon's fixture tab (Tests/Krowi_OptionsTests/Tests/Fixtures.lua) and its second tab, and
---       the page the window makes of it (SearchElements)
+--   S1  the names on each of lib.Internal.Mixins' tables and on lib.Internal.Build: a method lost in a move shows as
+--       missing
+--   S2  lib.Internal.Search on the test addon's fixture tab (Tests/Krowi_OptionsTests/Tests/Fixtures.lua) and its second
+--       tab, and the page the window makes of it (SearchElements)
 --   S3  each section's page signature, as the window's FillPage computes it
 --   S4  two copies mixed (h.LoadCopy): every window method recorded in S1 is still there
 --   S5  no file keeps another file's field in a local at load (CLAUDE.md, Versioning): the kit's static two-copy check
 --       (skills/release/TwoCopy.ps1, Find-LoadTimeCaptures) ported, with the same rules
+--   S6  the keys on lib and on lib.Internal: a name added to lib is a decision (public, so frozen with the contract)
 -- A snapshot passes while the code gives what is recorded. On a difference it names what changed and prints all that the
 -- code gives now, to be recorded in the same change when the difference is meant (a method added or renamed on purpose).
--- Step 10 of the plan moves the internals under lib.Internal; Internal() reads them there once they are.
+-- Step 10 of the plan moved the internals under lib.Internal; Internal() reads them there, or on lib on a copy from
+-- before.
 
 local h = ...
 local Check, Scenario, LoadCopy, Window = h.Check, h.Scenario, h.LoadCopy, h.Window
@@ -108,8 +111,8 @@ local function Snapshot(id, title, observe, recorded)
 end
 
 -- [[ S1: the names on the mixins and the builders ]] --
--- Every key of each table on lib.Mixins (the window's and the rows'; Tab's __index is its tabs' metatable link), as
--- recorded; S1.Mixins checks that the library has these tables and no other
+-- Every key of each table on lib.Internal.Mixins (the window's and the rows'; Tab's __index is its tabs' metatable
+-- link), as recorded; S1.Mixins checks that the library has these tables and no other
 local mixins = {
     Card = [[
 Init, OnClick, OnEnter, OnLeave, SetHovered]],
@@ -158,17 +161,18 @@ Card, CardRow, CheckButton, Color, Finish, GridHeaderRow, GridRow, HeaderRow, He
 LinkRow, NavButton, NavHeader, NavSpacer, NoteRow, OptionRow, Row, SearchHeadingRow, Select, SubHeadingRow, SubRow,
 TabRow, Text, Window]]
 
-Names("S1.Mixins", "the tables on lib.Mixins", function() return SortedKeys(Internal(LoadCopy(), "Mixins")) end,
+Names("S1.Mixins", "the tables on lib.Internal.Mixins", function() return SortedKeys(Internal(LoadCopy(), "Mixins")) end,
     table.concat(SortedKeys(mixins), ", "))
 
 for _, name in ipairs(SortedKeys(mixins)) do
-    Names("S1." .. name, ("the names on lib.Mixins.%s"):format(name), function()
+    Names("S1." .. name, ("the names on lib.Internal.Mixins.%s"):format(name), function()
         local mixin = Internal(LoadCopy(), "Mixins")[name]
         return type(mixin) == "table" and SortedKeys(mixin) or {}
     end, mixins[name])
 end
 
-Names("S1.Build", "the builders on lib.Build", function() return SortedKeys(Internal(LoadCopy(), "Build")) end, builders)
+Names("S1.Build", "the builders on lib.Internal.Build", function() return SortedKeys(Internal(LoadCopy(), "Build")) end,
+    builders)
 
 -- [[ The fixture tab ]] --
 -- Loaded as Tests/Krowi_OptionsTests/Headless.lua loads it, without running the test addon's scenarios
@@ -203,11 +207,12 @@ local function Label(element)
 end
 
 -- [[ S2: the search ]] --
--- A found row per line, in the order lib.Search gives them: tab > section > heading > kind: name
+-- A found row per line, in the order lib.Internal.Search gives them: tab > section > heading > kind: name
 local count = 0
 local function Search(text, all, broad, recorded)
     count = count + 1
-    Snapshot("S2." .. count, ("lib.Search %q, %s, %s"):format(text, all and "every tab" or "this tab", broad and "names and descriptions" or "names"),
+    Snapshot("S2." .. count, ("lib.Internal.Search %q, %s, %s"):format(text, all and "every tab" or "this tab",
+        broad and "names and descriptions" or "names"),
         function()
             local lib = FixtureTabs()
             local lines = {}
@@ -590,8 +595,8 @@ Scenario("S4b", "a copy whose only newer file is WindowMixin.lua, then a full co
     Target = "core minor 0, WindowMixin minor 1; every window method of S1 present; the same table",
 })
 
--- Whether lib.Mixins.Window stays the same table is left out here: today the newer WindowMixin.lua replaces it, and
--- step 1 of the plan makes every window file add to it instead
+-- Whether lib.Internal.Mixins.Window stays the same table is left out here: when this was recorded the newer
+-- WindowMixin.lua replaced it, and step 1 of the plan made every window file add to it instead
 Scenario("S4c", "a full copy, then a copy whose only newer file is WindowMixin.lua", {
     Observe = function()
         LoadCopy()
@@ -604,12 +609,13 @@ Scenario("S4c", "a full copy, then a copy whose only newer file is WindowMixin.l
 
 -- [[ S5: no load-time captures ]] --
 -- The kit's Find-LoadTimeCaptures (skills/release/TwoCopy.ps1) in Lua, on the column-0 statements of the files: the names
--- a file binds to the library (its registration's locals, file-level aliases such as `local build = lib.Build`), the
--- fields each file defines (`function build.Finish(`) or assigns (`lib.Mixins.Row = RowMixin`), and the file-level locals
--- that take a field (`local Finish = build.Finish`, one of several in `local a, Finish = 0, build.Finish`, or
--- `Finish = build.Finish` into a local declared before). A local fails when another file defines or replaces that field:
--- with copies mixed it keeps the older copy's. A field only ever set as `X = X or {}` (lib.Mixins, lib.Build, lib.Tabs)
--- is fine, since every copy fills the same table. Not seen, as in the kit: a capture in an indented line.
+-- a file binds to the library (its registration's locals, file-level aliases such as
+-- `local build = lib.Internal.Build`), the fields each file defines (`function build.Finish(`) or assigns
+-- (`lib.Internal.Mixins.Row = RowMixin`), and the file-level locals that take a field (`local Finish = build.Finish`, one
+-- of several in `local a, Finish = 0, build.Finish`, or `Finish = build.Finish` into a local declared before). A local
+-- fails when another file defines or replaces that field: with copies mixed it keeps the older copy's. A field only ever
+-- set as `X = X or {}` (lib.Internal and its Mixins, Build and Tabs) is fine, since every copy fills the same table. Not
+-- seen, as in the kit: a capture in an indented line.
 local registrars = { KROWI_LIBMAN = true, LibStub = true }
 local registrations = { NewLibrary = true, NewSubmodule = true, GetCurrentLibrary = true }
 
@@ -726,10 +732,41 @@ Scenario("S5a", "no library file keeps another file's field in a local at load",
 Scenario("S5b", "the scan finds a capture planted in Search.lua, and passes a shared table", {
     Observe = function()
         local found = Captures(LibrarySources({ ["Search.lua"] = function(text)
-            return text .. "\nlocal CreateWindow = lib.CreateWindow\nlocal mixins = lib.Mixins"
+            return text .. "\nlocal CreateWindow = lib.CreateWindow\nlocal mixins = lib.Internal.Mixins"
         end }))
         return #found == 0 and "none" or table.concat(found, "; ")
     end,
     Recorded = "Search.lua: CreateWindow = lib.CreateWindow (defined in Krowi_Options.lua)",
     Target = "Search.lua: CreateWindow = lib.CreateWindow (defined in Krowi_Options.lua)",
 })
+
+-- [[ S6: the keys on lib and on lib.Internal ]] --
+-- lib holds the public surface (CreateWindow, GetStrings, Markup, WindowName), Internal, what LibMan puts on a library
+-- (Name, Version, Localization; L, the phrases) and the submodules LibMan hangs on it under their names (ElementKinds,
+-- SearchModule, RowMixins, ...). A key added to lib is a decision to record here: public, and then frozen with the
+-- contract (CLAUDE.md), or under lib.Internal, which can change in any version.
+local libKeys = [[
+CreateWindow, ElementKinds, GetStrings, Internal, L, Localization, Markup, Name, RowFrames, RowMixins, SearchModule,
+Version, WindowFrame, WindowHelp, WindowLayout, WindowMixin, WindowName, WindowPage, WindowSearch]]
+local internalKeys = [[
+Build, CardColumns, CardCrop, CardRowHeight, CardWidth, Flatten, Geometry, GetFrame, InitList, Kinds, Mixins,
+RowGeometry, RowX, Search, SetShared, Tabs, WindowWidth]]
+
+Names("S6.lib", "the keys on lib after a full load", function() return SortedKeys(LoadCopy()) end, libKeys)
+
+Names("S6.Internal", "the keys on lib.Internal after a full load", function()
+    local internal = LoadCopy().Internal
+    return type(internal) == "table" and SortedKeys(internal) or {}
+end, internalKeys)
+
+-- With a tab registered and the window made (a stand-in for its frame), the window and the state it shows join
+-- lib.Internal (Frame, Shared), and lib keeps its keys
+Names("S6.window", "the keys on lib and on lib.Internal once the window is made", function()
+    local lib = LoadCopy()
+    h.StandInWindows(lib)
+    lib.Internal.GetFrame(lib.CreateWindow(h.Config()))
+    local keys = {}
+    for _, key in ipairs(SortedKeys(lib)) do keys[#keys + 1] = key end
+    for _, key in ipairs(SortedKeys(lib.Internal)) do keys[#keys + 1] = "Internal." .. key end
+    return keys
+end, libKeys .. ", " .. ((internalKeys .. ", Frame, Shared"):gsub("([%w_]+)", "Internal.%1")))

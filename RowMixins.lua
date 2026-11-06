@@ -15,8 +15,8 @@
 --   Link       { Text, Detail, OnClick }: a line that opens something
 --   Cards      { Cards = { { Name, Text, IsNew, OnClick, Picture, Width, Height, TexCoords, Part | Icon } } }: three to a
 --              row (CardMixin below)
--- A kind the window does not know draws nothing. Each element picks its row (Kinds.lua, lib.Kinds); an option row reads
--- the option's interface:
+-- A kind the window does not know draws nothing. Each element picks its row (Kinds.lua, lib.Internal.Kinds); an option
+-- row reads the option's interface:
 --   every option  Type ("toggle", "range", "select", "execute", "input" or "key"), GetLabel, IsHidden, IsDisabled, Get,
 --                 Set (an execute option's runs it), IsChanged, Reset, GetNeedsReload
 --   per type      range: GetRange (min, max, step), optionally Format(value); select: GetValues ({ { value, text } }),
@@ -35,13 +35,16 @@
 -- A key option's Slots[n]:Set(key) runs from the key row: an addon's Set that writes bindings (SetBinding, SaveBindings)
 -- fires UPDATE_BINDINGS from addon code, which runs Blizzard's binding displays tainted for the session (accepted,
 -- Krowi_AchievementFilter #197).
--- RowFrames.lua builds each row and applies its mixin, kept on lib.Mixins rather than as a global, so the newest copy of
--- the library decides.
+-- RowFrames.lua builds each row and applies its mixin, kept on lib.Internal.Mixins rather than as a global, so the
+-- newest copy of the library decides.
 
 -- A standalone install loaded before any Krowi addon has no KROWI_LIBMAN and nothing to serve (Krowi_Options.lua)
 if not KROWI_LIBMAN then return end
 local sub, lib = KROWI_LIBMAN:NewSubmodule("RowMixins", 0)
 if not sub then return end
+
+-- What is not the public surface lives under lib.Internal (Krowi_Options.lua)
+lib.Internal = lib.Internal or {}
 
 -- [[ Where a row's name and controls stand ]] --
 -- In a column 330 from the row's right edge, wide enough for the two key buttons (Krowi kept it over the game's placement
@@ -58,7 +61,7 @@ local placement = {
 }
 local geometries = {} -- per indent, made once
 
-function lib.RowGeometry(indent)
+function lib.Internal.RowGeometry(indent)
     indent = indent or 0
     local geometry = geometries[indent]
     if not geometry then
@@ -74,7 +77,7 @@ end
 local relativeX = { LEFT = 0, CENTER = 0.5, RIGHT = 1 }
 
 -- A geometry's anchor as x from the left of a row this wide
-function lib.RowX(spec, width)
+function lib.Internal.RowX(spec, width)
     return relativeX[spec[1]] * width + spec[2]
 end
 
@@ -90,10 +93,10 @@ local placedControls = { Toggle = "Toggle", Range = "Range", Select = "Select", 
 -- The game's key binding button (KeyBindingFrameBindingButtonTemplate on UIMenuButtonStretchTemplate, the same on every
 -- client): silver art that presses down under the mouse. RowFrames.lua copies its art with pieces that carry no names;
 -- the template's $parent names would make a global per piece for every row.
--- Each mixin table on lib.Mixins is added to, never replaced: a newer copy of this file loaded second would otherwise
--- empty a table an older copy filled (WindowMixin.lua, the same for the window's).
-lib.Mixins.KeyButton = lib.Mixins.KeyButton or {}
-local KeyButtonMixin = lib.Mixins.KeyButton
+-- Each mixin table on lib.Internal.Mixins is added to, never replaced: a newer copy of this file loaded second would
+-- otherwise empty a table an older copy filled (WindowMixin.lua, the same for the window's).
+lib.Internal.Mixins.KeyButton = lib.Internal.Mixins.KeyButton or {}
+local KeyButtonMixin = lib.Internal.Mixins.KeyButton
 
 local keyButtonPieces = { "TopLeft", "TopRight", "BottomLeft", "BottomRight", "TopMiddle", "MiddleLeft", "MiddleRight", "BottomMiddle", "MiddleMiddle" }
 
@@ -113,16 +116,16 @@ function KeyButtonMixin:Lift()
 end
 
 -- [[ Header, sub-heading, note ]] --
-lib.Mixins.TextRow = lib.Mixins.TextRow or {}
-local TextRowMixin = lib.Mixins.TextRow
+lib.Internal.Mixins.TextRow = lib.Internal.Mixins.TextRow or {}
+local TextRowMixin = lib.Internal.Mixins.TextRow
 
 function TextRowMixin:Init(element)
     self.Text:SetText(element.Text or "")
 end
 
 -- [[ An option ]] --
-lib.Mixins.OptionRow = lib.Mixins.OptionRow or {}
-local OptionRowMixin = lib.Mixins.OptionRow
+lib.Internal.Mixins.OptionRow = lib.Internal.Mixins.OptionRow or {}
+local OptionRowMixin = lib.Internal.Mixins.OptionRow
 
 -- A control under the mouse fires its OnEnter while greyed out too, as the game's own settings check box does
 -- (SettingsCheckboxTemplate's motionScriptsWhileDisabled, Blizzard_SettingControls.xml), so the help still says what a
@@ -310,10 +313,11 @@ local optionTypes = {
             for slot, button in ipairs({ row.Key1, row.Key2 }) do
                 local slotOption = option.Slots and option.Slots[slot]
                 if slotOption then
-                    -- As the game's Keybindings page shows them (BindingUtil.lua): no key in grey and a little faded, the
-                    -- button waiting for a key lit
+                    -- As the game's Keybindings page shows them (BindingUtil.lua): no key in grey and a little
+                    -- faded, the button waiting for a key lit
                     local key = slotOption:Get()
-                    local text = row.Capturing == slot and strings.PressAKey or key and key ~= "" and GetBindingText(key)
+                    local text = row.Capturing == slot and strings.PressAKey
+                        or key and key ~= "" and GetBindingText(key)
                     button:SetText(text or GRAY_FONT_COLOR:WrapTextInColorCode(strings.NotBound))
                     button:SetAlpha(text and 1 or 0.8)
                     button.SelectedHighlight:SetShown(row.Capturing == slot)
@@ -334,7 +338,7 @@ function OptionRowMixin:Init(element, window)
     for _, control in ipairs({ self.Toggle, self.Range, self.Select, self.Execute, self.Input, self.Key1, self.Key2 }) do
         control:Hide()
     end
-    local geometry = lib.RowGeometry(option.Indent)
+    local geometry = lib.Internal.RowGeometry(option.Indent)
     self.Geometry = geometry
     self.Label:ClearAllPoints()
     self.Label:SetPoint("LEFT", self, geometry.NameLeft[1], geometry.NameLeft[2], 0)
@@ -342,7 +346,7 @@ function OptionRowMixin:Init(element, window)
     for place, key in next, placedControls do
         Place(self[key], self, geometry[place])
     end
-    self.Range:SetWidth(lib.Geometry.SliderWidth) -- the row may have drawn a check box's slider before
+    self.Range:SetWidth(lib.Internal.Geometry.SliderWidth) -- the row may have drawn a check box's slider before
     self.Label:SetText(option:GetLabel())
 
     local optionType = optionTypes[option.Type]
@@ -352,7 +356,7 @@ function OptionRowMixin:Init(element, window)
         control:ClearAllPoints()
         control:SetPoint("LEFT", self.Toggle, "RIGHT", 5, 0)
         if with.Type == "range" then
-            self.Range:SetWidth(lib.Geometry.WithSliderWidth)
+            self.Range:SetWidth(lib.Internal.Geometry.WithSliderWidth)
             InitRange(self, with)
         else
             self.Execute:SetText(with:GetButtonText())
@@ -446,7 +450,7 @@ function OptionRowMixin:OnEnter(control)
     end
     local optionType = self.Geometry and self.Option and optionTypes[self.Option.Type]
     local kind = optionType and optionType.Place
-    self.Window:OnRowEnter(self.Option, self, kind and lib.RowX(self.Geometry[kind], self:GetWidth()))
+    self.Window:OnRowEnter(self.Option, self, kind and lib.Internal.RowX(self.Geometry[kind], self:GetWidth()))
 end
 
 -- Moving onto one of the row's own controls leaves the row too: the arrow stays while the mouse is on the row
@@ -457,8 +461,8 @@ function OptionRowMixin:OnLeave()
 end
 
 -- [[ A family heading or a group's All / None ]] --
-lib.Mixins.SubRow = lib.Mixins.SubRow or {}
-local SubRowMixin = lib.Mixins.SubRow
+lib.Internal.Mixins.SubRow = lib.Internal.Mixins.SubRow or {}
+local SubRowMixin = lib.Internal.Mixins.SubRow
 
 function SubRowMixin:OnLoad()
     local function SetAll(value)
@@ -478,7 +482,7 @@ end
 function SubRowMixin:Init(element, window)
     self.Element, self.Window = element, window
     self.Text:SetText(element.Text or "")
-    Place(self.All, self, lib.RowGeometry(0).Sub)
+    Place(self.All, self, lib.Internal.RowGeometry(0).Sub)
     local strings = window.Strings
     self.All:SetText(strings.All)
     self.None:SetText(strings.None)
@@ -487,8 +491,8 @@ end
 -- [[ A grid: column titles, then a row of check boxes per line ]] --
 local gridLeft, gridColumn, gridColumns = 200, 72, 5
 
-lib.Mixins.GridHeaderRow = lib.Mixins.GridHeaderRow or {}
-local GridHeaderRowMixin = lib.Mixins.GridHeaderRow
+lib.Internal.Mixins.GridHeaderRow = lib.Internal.Mixins.GridHeaderRow or {}
+local GridHeaderRowMixin = lib.Internal.Mixins.GridHeaderRow
 
 function GridHeaderRowMixin:OnLoad()
     self.Columns = {}
@@ -507,13 +511,13 @@ function GridHeaderRowMixin:Init(element)
     end
 end
 
-lib.Mixins.GridRow = lib.Mixins.GridRow or {}
-local GridRowMixin = lib.Mixins.GridRow
+lib.Internal.Mixins.GridRow = lib.Internal.Mixins.GridRow or {}
+local GridRowMixin = lib.Internal.Mixins.GridRow
 
 function GridRowMixin:OnLoad()
     self.Cells = {}
     for i = 1, gridColumns do
-        local cell = lib.Build.CheckButton(self)
+        local cell = lib.Internal.Build.CheckButton(self)
         cell:SetPoint("CENTER", self, "LEFT", gridLeft + (i - 0.5) * gridColumn, 0)
         cell:SetScript("OnClick", function()
             local option = self.Element.Cells[i]
@@ -557,8 +561,8 @@ end
 
 -- [[ The tab list: a tab's position, whether it shows, and arrows to move it ]] --
 -- The check box is ShowCheck, not Show: a child key named Show replaces the row's own Show method.
-lib.Mixins.TabRow = lib.Mixins.TabRow or {}
-local TabRowMixin = lib.Mixins.TabRow
+lib.Internal.Mixins.TabRow = lib.Internal.Mixins.TabRow or {}
+local TabRowMixin = lib.Internal.Mixins.TabRow
 
 function TabRowMixin:OnLoad()
     self.ShowCheck:SetScript("OnClick", function()
@@ -587,7 +591,7 @@ function TabRowMixin:Init(element, window)
     self.Position:SetText(item.Position)
     self.Label:SetText(item.Show and item.Show:GetLabel() or "?")
     self.Source:SetText(item.Source or "")
-    Place(self.Up, self, lib.RowGeometry(0).TabArrows)
+    Place(self.Up, self, lib.Internal.RowGeometry(0).TabArrows)
     self.Up:SetEnabled(item.MoveUp ~= nil)
     self.Down:SetEnabled(item.MoveDown ~= nil)
     self:Refresh()
@@ -605,7 +609,8 @@ end
 
 function TabRowMixin:OnEnter()
     self.Hover:Show()
-    self.Window:OnRowEnter(self.Element.Item.Show, self, lib.Geometry.TabCheckX) -- where ShowCheck stands (RowFrames.lua)
+    -- From where ShowCheck stands (RowFrames.lua)
+    self.Window:OnRowEnter(self.Element.Item.Show, self, lib.Internal.Geometry.TabCheckX)
 end
 
 function TabRowMixin:OnLeave()
@@ -614,8 +619,8 @@ function TabRowMixin:OnLeave()
 end
 
 -- [[ A section's name in the search results, as the game's (SettingsListSearchCategoryMixin): a click opens it ]] --
-lib.Mixins.SearchHeadingRow = lib.Mixins.SearchHeadingRow or {}
-local SearchHeadingRowMixin = lib.Mixins.SearchHeadingRow
+lib.Internal.Mixins.SearchHeadingRow = lib.Internal.Mixins.SearchHeadingRow or {}
+local SearchHeadingRowMixin = lib.Internal.Mixins.SearchHeadingRow
 
 function SearchHeadingRowMixin:Init(element)
     self.Element = element
@@ -635,8 +640,8 @@ function SearchHeadingRowMixin:OnLeave()
 end
 
 -- [[ A link: a New section, an overview entry ]] --
-lib.Mixins.LinkRow = lib.Mixins.LinkRow or {}
-local LinkRowMixin = lib.Mixins.LinkRow
+lib.Internal.Mixins.LinkRow = lib.Internal.Mixins.LinkRow or {}
+local LinkRowMixin = lib.Internal.Mixins.LinkRow
 
 function LinkRowMixin:Init(element)
     self.Element = element
@@ -651,23 +656,24 @@ end
 -- [[ Cards: a section's picture, name and line, three to a row (docs/work/2026-11-02-overview-cards) ]] --
 -- A card is { Picture, Width, Height, TexCoords, Part } (a picture as the help pane draws it, Part optional, see
 -- CardCrop) or { Icon }, and Name, Text, IsNew and OnClick. The cards and the 12 between them fill the row. A picture
--- fills the 86 high area inside the card's 1 px border (lib.Geometry.CardPictureHeight, Kinds.lua), cut to it from its
--- top left, as the mockup's thumbnails were (object-fit: cover); the name and the line stand 10 in from the card's
--- sides. The fonts are RowFrames.lua's.
-lib.CardColumns = 3
+-- fills the 86 high area inside the card's 1 px border (lib.Internal.Geometry.CardPictureHeight, Kinds.lua), cut to it
+-- from its top left, as the mockup's thumbnails were (object-fit: cover); the name and the line stand 10 in from the
+-- card's sides. The fonts are RowFrames.lua's.
+lib.Internal.CardColumns = 3
 local cardGap, cardBorder = 12, 1
 local cardTextInset, nameTop, lineGap, cardBottom, newGap = 10, 8, 3, 10, 6
-local borderHoverColor = { 1, 0.82, 0, 0.6 } -- the border under the mouse; out of it, lib.Geometry.CardBorderColor
+-- The border under the mouse; out of it, lib.Internal.Geometry.CardBorderColor
+local borderHoverColor = { 1, 0.82, 0, 0.6 }
 
-function lib.CardWidth(rowWidth)
-    return (rowWidth - (lib.CardColumns - 1) * cardGap) / lib.CardColumns
+function lib.Internal.CardWidth(rowWidth)
+    return (rowWidth - (lib.Internal.CardColumns - 1) * cardGap) / lib.Internal.CardColumns
 end
 
 -- The texture coordinates that fill the picture area of a card this wide; TexCoords is the part of its power-of-two
 -- texture a picture fills (the help pictures' Pictures.lua). Part = { X, Y } moves the cut from the top left (0) to the
 -- bottom right (1) of what does not fit, as CSS's object-position does.
-function lib.CardCrop(picture, cardWidth)
-    local pictureHeight = lib.Geometry.CardPictureHeight
+function lib.Internal.CardCrop(picture, cardWidth)
+    local pictureHeight = lib.Internal.Geometry.CardPictureHeight
     local width = cardWidth - 2 * cardBorder
     local scale = math.max(width / picture.Width, pictureHeight / picture.Height)
     local coords, part = picture.TexCoords or { 0, 1, 0, 1 }, picture.Part or {}
@@ -679,31 +685,31 @@ function lib.CardCrop(picture, cardWidth)
 end
 
 -- A row as tall as its tallest card, and the gap under it
-function lib.CardRowHeight(window, element)
-    local lineWidth = lib.CardWidth(window:PageWidth()) - 2 * cardTextInset
+function lib.Internal.CardRowHeight(window, element)
+    local lineWidth = lib.Internal.CardWidth(window:PageWidth()) - 2 * cardTextInset
     local nameHeight, lineHeight = 0, 0
     for _, card in ipairs(element.Cards) do
         nameHeight = math.max(nameHeight, window:MeasureText(card.Name, "GameFontNormal", 1000))
         if card.Text and card.Text ~= "" then lineHeight = math.max(lineHeight, window:MeasureText(card.Text, "GameFontDisableSmall", lineWidth)) end
     end
-    return 2 * cardBorder + lib.Geometry.CardPictureHeight + nameTop + nameHeight + (lineHeight > 0 and lineGap + lineHeight or 0) + cardBottom
-        + cardGap
+    return 2 * cardBorder + lib.Internal.Geometry.CardPictureHeight + nameTop + nameHeight
+        + (lineHeight > 0 and lineGap + lineHeight or 0) + cardBottom + cardGap
 end
 
-lib.Mixins.CardRow = lib.Mixins.CardRow or {}
-local CardRowMixin = lib.Mixins.CardRow
+lib.Internal.Mixins.CardRow = lib.Internal.Mixins.CardRow or {}
+local CardRowMixin = lib.Internal.Mixins.CardRow
 
 function CardRowMixin:OnLoad()
     self.Cards = {}
-    for i = 1, lib.CardColumns do
-        self.Cards[i] = lib.Build.Card(self)
+    for i = 1, lib.Internal.CardColumns do
+        self.Cards[i] = lib.Internal.Build.Card(self)
     end
 end
 
 -- The row's own width is the page's, which the window knows before the view has sized the row
 function CardRowMixin:Init(element, window)
     self.Element = element
-    local width = lib.CardWidth(window:PageWidth())
+    local width = lib.Internal.CardWidth(window:PageWidth())
     for i, frame in ipairs(self.Cards) do
         local card, x = element.Cards[i], (i - 1) * (width + cardGap)
         frame:ClearAllPoints()
@@ -715,8 +721,8 @@ function CardRowMixin:Init(element, window)
     end
 end
 
-lib.Mixins.Card = lib.Mixins.Card or {}
-local CardMixin = lib.Mixins.Card
+lib.Internal.Mixins.Card = lib.Internal.Mixins.Card or {}
+local CardMixin = lib.Internal.Mixins.Card
 
 function CardMixin:Init(card, width)
     self.Card = card
@@ -724,7 +730,7 @@ function CardMixin:Init(card, width)
     self.Icon:SetShown(card.Picture == nil and card.Icon ~= nil)
     if card.Picture then
         self.Picture:SetTexture(card.Picture)
-        self.Picture:SetTexCoord(lib.CardCrop(card, width))
+        self.Picture:SetTexCoord(lib.Internal.CardCrop(card, width))
     elseif card.Icon then
         self.Icon:SetTexture(card.Icon)
     end
@@ -749,7 +755,7 @@ end
 
 function CardMixin:SetHovered(hovered)
     self.Hover:SetShown(hovered)
-    local color = hovered and borderHoverColor or lib.Geometry.CardBorderColor
+    local color = hovered and borderHoverColor or lib.Internal.Geometry.CardBorderColor
     for _, edge in ipairs(self.Edges) do edge:SetColorTexture(unpack(color)) end
 end
 

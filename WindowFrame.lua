@@ -13,9 +13,12 @@ if not KROWI_LIBMAN then return end
 local sub, lib = KROWI_LIBMAN:NewSubmodule("WindowFrame", 0)
 if not sub then return end
 
--- RowFrames.lua's pieces, looked up on each call: a newer copy's RowFrames.lua replaces them on lib.Build even when this
--- file stays the older copy's
-local build = lib.Build
+-- What is not the public surface lives under lib.Internal (Krowi_Options.lua)
+lib.Internal = lib.Internal or {}
+
+-- RowFrames.lua's pieces, looked up on each call: a newer copy's RowFrames.lua replaces them on lib.Internal.Build even
+-- when this file stays the older copy's
+local build = lib.Internal.Build
 local function Text(...) return build.Text(...) end
 local function Color(...) return build.Color(...) end
 local function Finish(...) return build.Finish(...) end
@@ -39,7 +42,8 @@ function build.NavButton(parent)
     button.NewFeature:SetSize(1, 1)
     button.NewFeature:SetPoint("BOTTOMRIGHT", button.Label, "LEFT", -4, -10)
     button.NewFeature:Hide()
-    return Finish(button, lib.Mixins.NavButton, { OnClick = "OnClick", OnEnter = "OnEnter", OnLeave = "OnLeave" })
+    return Finish(button, lib.Internal.Mixins.NavButton,
+        { OnClick = "OnClick", OnEnter = "OnEnter", OnLeave = "OnLeave" })
 end
 
 function build.NavHeader(parent)
@@ -48,7 +52,7 @@ function build.NavHeader(parent)
     header.Background:SetPoint("TOPLEFT")
     header.Label = Text(header, "OVERLAY", "GameFontHighlightMedium", "LEFT")
     header.Label:SetPoint("LEFT", 20, -1)
-    return Finish(header, lib.Mixins.NavHeader)
+    return Finish(header, lib.Internal.Mixins.NavHeader)
 end
 
 function build.NavSpacer(parent)
@@ -62,7 +66,7 @@ function build.HelpText(parent)
     block.Text = Text(block, "ARTWORK", "GameFontHighlight", "LEFT", "TOP")
     block.Text:SetPoint("TOPLEFT", 4, -2)
     block.Text:SetPoint("BOTTOMRIGHT", -4, 0)
-    return Finish(block, lib.Mixins.HelpText)
+    return Finish(block, lib.Internal.Mixins.HelpText)
 end
 
 function build.HelpPicture(parent)
@@ -73,7 +77,8 @@ function build.HelpPicture(parent)
     block.Highlight:SetBlendMode("ADD")
     block.Highlight:SetPoint("TOPLEFT", block.Picture)
     block.Highlight:SetPoint("BOTTOMRIGHT", block.Picture)
-    return Finish(block, lib.Mixins.HelpPicture, { OnClick = "OnClick", OnEnter = "OnEnter", OnLeave = "OnLeave" })
+    return Finish(block, lib.Internal.Mixins.HelpPicture,
+        { OnClick = "OnClick", OnEnter = "OnEnter", OnLeave = "OnLeave" })
 end
 
 -- [[ The window ]] --
@@ -174,6 +179,6 @@ function build.Window()
     resize:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight", "ADD")
     frame.ResizeButton = resize
 
-    return Finish(frame, lib.Mixins.Window, { OnLoad = "OnLoad", OnShow = "OnShow", OnHide = "OnHide", OnEvent = "OnEvent",
-        OnSizeChanged = "OnSizeChanged", OnDragStart = "OnDragStart", OnDragStop = "OnDragStop" })
+    return Finish(frame, lib.Internal.Mixins.Window, { OnLoad = "OnLoad", OnShow = "OnShow", OnHide = "OnHide",
+        OnEvent = "OnEvent", OnSizeChanged = "OnSizeChanged", OnDragStart = "OnDragStart", OnDragStop = "OnDragStop" })
 end

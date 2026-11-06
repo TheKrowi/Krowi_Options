@@ -15,11 +15,14 @@ if not KROWI_LIBMAN then return end
 local sub, lib = KROWI_LIBMAN:NewSubmodule("WindowLayout", 0)
 if not sub then return end
 
+-- What is not the public surface lives under lib.Internal (Krowi_Options.lua)
+lib.Internal = lib.Internal or {}
+
 -- The navigation is as wide as the game's category list, so its header bars (199 px) end at the divider; the help pane
--- is lib.Geometry.HelpWidth wide (Kinds.lua), and collapsed it leaves a strip
+-- is lib.Internal.Geometry.HelpWidth wide (Kinds.lua), and collapsed it leaves a strip
 local navWidth, stripWidth = 199, 30
 -- The game's Options window is 920 wide (Blizzard_SettingsPanel.xml); ours adds the help pane, or its strip, to the right
--- of that and resizes in height only, down to lib.Geometry.MinHeight (docs/work/2026-11-02-options-widths)
+-- of that and resizes in height only, down to lib.Internal.Geometry.MinHeight (docs/work/2026-11-02-options-widths)
 local gameWidth = 920
 local dividerWidth = 630 -- Options_HorizontalDivider at its own size, measured with the kit's Get-Atlas.ps1
 -- The page as the game's settings list lays it out (Blizzard_SettingsPanel.xml, Blizzard_SettingsList.lua): its
@@ -27,18 +30,18 @@ local dividerWidth = 630 -- Options_HorizontalDivider at its own size, measured 
 -- from 15 left of the container to 20 before its right, its rows padded 25 on the left, so a row is 635 wide
 local pageInsets = { Left = 16 - 15, Right = 4 + 20, Pad = 25 }
 
-function lib.WindowWidth(collapsed)
-    return gameWidth + (collapsed and stripWidth or lib.Geometry.HelpWidth)
+function lib.Internal.WindowWidth(collapsed)
+    return gameWidth + (collapsed and stripWidth or lib.Internal.Geometry.HelpWidth)
 end
 
 -- [[ The window ]] --
 -- Every file of the window adds its methods to this one table (WindowMixin.lua)
-lib.Mixins.Window = lib.Mixins.Window or {}
-local WindowMixin = lib.Mixins.Window
+lib.Internal.Mixins.Window = lib.Internal.Mixins.Window or {}
+local WindowMixin = lib.Internal.Mixins.Window
 
--- The page's list draws the element kinds (lib.Kinds, Kinds.lua); the navigation and the help pane (WindowHelp.lua)
--- draw their own, in the same shape: the builder of each row (WindowFrame.lua) and its height. All three are pooled by
--- lib.InitList (Kinds.lua).
+-- The page's list draws the element kinds (lib.Internal.Kinds, Kinds.lua); the navigation and the help pane
+-- (WindowHelp.lua) draw their own, in the same shape: the builder of each row (WindowFrame.lua) and its height. All
+-- three are pooled by lib.Internal.InitList (Kinds.lua).
 local navKinds = {
     NavHeader = { Build = "NavHeader", Height = 30 },
     NavButton = { Build = "NavButton", Height = 20 },
@@ -119,10 +122,10 @@ function WindowMixin:LoadLayout()
     self.Measure:Hide()
     self.Measure:SetJustifyH("LEFT")
 
-    local navBar = lib.InitList(self, self.NavScrollBox, self.NavScrollBar, navKinds, navLeftPad, 2)
+    local navBar = lib.Internal.InitList(self, self.NavScrollBox, self.NavScrollBar, navKinds, navLeftPad, 2)
     self.NavScrollShown = self.NavScrollBar:IsShown()
     navBar:RegisterCallback(ManagedScrollBarVisibilityBehaviorMixin.Event.OnVisibilityChanged, function(_, shown) self:OnNavScrollBarShown(shown) end, self)
-    lib.InitList(self, self.PageScrollBox, self.PageScrollBar, lib.Kinds, pageInsets.Pad)
+    lib.Internal.InitList(self, self.PageScrollBox, self.PageScrollBar, lib.Internal.Kinds, pageInsets.Pad)
 
     self.CollapseButton:SetScript("OnClick", function() self:SetPaneCollapsed(true) end)
     self.ExpandButton:SetScript("OnClick", function() self:SetPaneCollapsed(false) end)
@@ -144,7 +147,7 @@ function WindowMixin:LoadLayout()
     self.ResizeButton:SetScript("OnMouseDown", function() self:StartSizing("BOTTOM") end) -- in height only
     self.ResizeButton:SetScript("OnMouseUp", function()
         self:StopMovingOrSizing()
-        lib.SetShared("Size", { self:GetWidth(), self:GetHeight() })
+        lib.Internal.SetShared("Size", { self:GetWidth(), self:GetHeight() })
         self:SavePoint() -- sizing re-anchors the window
         self:ReloadSection()
         self:UpdateShowMe() -- a secure Show me button placed over ours follows it
@@ -155,8 +158,8 @@ end
 -- fit, and one taller than it (a height saved on a larger screen) comes back inside it. keepLeft: the window grows and
 -- shrinks to the right, its top left staying where it is, and that place is saved.
 function WindowMixin:ApplyWidth(keepLeft)
-    local minHeight = lib.Geometry.MinHeight
-    local width = lib.WindowWidth(self.PaneCollapsed)
+    local minHeight = lib.Internal.Geometry.MinHeight
+    local width = lib.Internal.WindowWidth(self.PaneCollapsed)
     local screen = UIParent:GetWidth()
     local scale = screen > 0 and math.min(1, (screen - 40) / width) or 1
     local left, top = self:GetLeft(), self:GetTop()
@@ -225,12 +228,13 @@ end
 -- A row's width: the page's scroll box (pageInsets) without its rows' left padding
 function WindowMixin:PageWidth()
     return self:GetWidth() - (bodyInsets.Left - bodyInsets.Right) - self:NavEnd()
-        - (self.PaneCollapsed and stripWidth or lib.Geometry.HelpWidth) - pageInsets.Left - pageInsets.Right - pageInsets.Pad
+        - (self.PaneCollapsed and stripWidth or lib.Internal.Geometry.HelpWidth) - pageInsets.Left - pageInsets.Right
+        - pageInsets.Pad
 end
 
 function WindowMixin:Layout()
     local body = self.Body
-    local right = self.PaneCollapsed and stripWidth or lib.Geometry.HelpWidth
+    local right = self.PaneCollapsed and stripWidth or lib.Internal.Geometry.HelpWidth
     local navEnd = self:NavEnd()
 
     body:ClearAllPoints()
@@ -325,7 +329,7 @@ end
 
 function WindowMixin:SetPaneCollapsed(collapsed)
     self.PaneCollapsed = collapsed
-    lib.SetShared("PaneCollapsed", collapsed)
+    lib.Internal.SetShared("PaneCollapsed", collapsed)
     self:ApplyWidth(true) -- "How it works" widens the window to the right
     self:Layout()
     self:ReloadSection()
@@ -347,5 +351,5 @@ end
 
 function WindowMixin:SavePoint()
     local point, _, relativePoint, x, y = self:GetPoint(1)
-    lib.SetShared("Point", { point, relativePoint, x, y })
+    lib.Internal.SetShared("Point", { point, relativePoint, x, y })
 end

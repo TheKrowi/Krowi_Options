@@ -16,7 +16,10 @@ if not KROWI_LIBMAN then return end
 local sub, lib = KROWI_LIBMAN:NewSubmodule("RowFrames", 0)
 if not sub then return end
 
-local build = lib.Build
+-- What is not the public surface lives under lib.Internal (Krowi_Options.lua)
+lib.Internal = lib.Internal or {}
+
+local build = lib.Internal.Build
 
 -- [[ Pieces ]] --
 
@@ -57,7 +60,7 @@ end
 build.Finish = Finish
 
 -- A list row, hidden until the list hangs it on its frame. It has no height of its own: the list sets it to all of its
--- frame (lib.InitList, Kinds.lua) before it is shown, and sizes that frame by the element's kind.
+-- frame (lib.Internal.InitList, Kinds.lua) before it is shown, and sizes that frame by the element's kind.
 local function Row(frameType, parent)
     local row = CreateFrame(frameType, nil, parent)
     row:Hide()
@@ -135,7 +138,8 @@ function build.KeyButton(parent)
     button:SetDisabledFontObject(GameFontDisableSmall)
     button:SetHighlightTexture("Interface\\Buttons\\UI-Silver-Button-Highlight", "ADD")
     button:GetHighlightTexture():SetTexCoord(0, 1, 0.03, 0.7175)
-    return Finish(button, lib.Mixins.KeyButton, { OnMouseDown = "OnMouseDown", OnMouseUp = "Lift", OnShow = "Lift", OnEnable = "Lift" })
+    return Finish(button, lib.Internal.Mixins.KeyButton,
+        { OnMouseDown = "OnMouseDown", OnMouseUp = "Lift", OnShow = "Lift", OnEnable = "Lift" })
 end
 
 -- The game's settings dropdown with an arrow on each side (DropdownWithSteppersTemplate, as
@@ -181,7 +185,7 @@ function build.HeaderRow(parent)
     row.Text = Text(row, "ARTWORK", "GameFontHighlightLarge", "LEFT")
     row.Text:SetPoint("BOTTOMLEFT", 6, 6)
     row.Text:SetPoint("RIGHT", -6, 0)
-    return Finish(row, lib.Mixins.TextRow)
+    return Finish(row, lib.Internal.Mixins.TextRow)
 end
 
 function build.SubHeadingRow(parent)
@@ -189,7 +193,7 @@ function build.SubHeadingRow(parent)
     row.Text = Text(row, "ARTWORK", "GameFontHighlight", "LEFT")
     row.Text:SetPoint("LEFT", 16, 0)
     row.Text:SetPoint("RIGHT", -16, 0)
-    return Finish(row, lib.Mixins.TextRow)
+    return Finish(row, lib.Internal.Mixins.TextRow)
 end
 
 function build.NoteRow(parent)
@@ -197,7 +201,7 @@ function build.NoteRow(parent)
     row.Text = Text(row, "ARTWORK", "GameFontDisable", "LEFT", "TOP")
     row.Text:SetPoint("TOPLEFT", 16, -4)
     row.Text:SetPoint("BOTTOMRIGHT", -16, 0)
-    return Finish(row, lib.Mixins.TextRow)
+    return Finish(row, lib.Internal.Mixins.TextRow)
 end
 
 -- The row's light under the mouse
@@ -244,7 +248,7 @@ function build.OptionRow(parent)
     row.Toggle = build.CheckButton(row)
     row.Toggle:Hide()
     row.Range = CreateFrame("Frame", nil, row, "MinimalSliderWithSteppersTemplate")
-    row.Range:SetSize(lib.Geometry.SliderWidth, 20)
+    row.Range:SetSize(lib.Internal.Geometry.SliderWidth, 20)
     row.Range:Hide()
     row.Select = build.Select(row)
     row.Select:Hide()
@@ -261,7 +265,7 @@ function build.OptionRow(parent)
     row.Key2 = build.KeyButton(row)
     row.Key2:SetPoint("LEFT", row.Key1, "RIGHT")
     row.Key2:Hide()
-    return Finish(row, lib.Mixins.OptionRow, { OnLoad = "OnLoad", OnEnter = "OnEnter", OnLeave = "OnLeave" })
+    return Finish(row, lib.Internal.Mixins.OptionRow, { OnLoad = "OnLoad", OnEnter = "OnEnter", OnLeave = "OnLeave" })
 end
 
 -- [[ A family heading or a group's All / None ]] --
@@ -275,14 +279,14 @@ function build.SubRow(parent)
     row.None = CreateFrame("Button", nil, row, "UIPanelButtonNoTooltipTemplate")
     row.None:SetSize(70, 20)
     row.None:SetPoint("LEFT", row.All, "RIGHT", 6, 0)
-    return Finish(row, lib.Mixins.SubRow, { OnLoad = "OnLoad" })
+    return Finish(row, lib.Internal.Mixins.SubRow, { OnLoad = "OnLoad" })
 end
 
 -- [[ A grid ]] --
 
 function build.GridHeaderRow(parent)
     local row = Row("Frame", parent)
-    return Finish(row, lib.Mixins.GridHeaderRow, { OnLoad = "OnLoad" })
+    return Finish(row, lib.Internal.Mixins.GridHeaderRow, { OnLoad = "OnLoad" })
 end
 
 function build.GridRow(parent)
@@ -293,7 +297,7 @@ function build.GridRow(parent)
     row.Label:SetWordWrap(false)
     row.Label:SetWidth(180)
     row.Label:SetPoint("LEFT", 16, 0)
-    return Finish(row, lib.Mixins.GridRow, { OnLoad = "OnLoad", OnEnter = "OnEnter", OnLeave = "OnLeave" })
+    return Finish(row, lib.Internal.Mixins.GridRow, { OnLoad = "OnLoad", OnEnter = "OnEnter", OnLeave = "OnLeave" })
 end
 
 -- [[ A tab's place ]] --
@@ -320,11 +324,11 @@ function build.TabRow(parent)
     row.Source = Text(row, "ARTWORK", "GameFontDisableSmall", "LEFT")
     row.Source:SetPoint("LEFT", row.Label, "RIGHT", 8, 0)
     row.ShowCheck = build.CheckButton(row)
-    row.ShowCheck:SetPoint("LEFT", lib.Geometry.TabCheckX, 0)
+    row.ShowCheck:SetPoint("LEFT", lib.Internal.Geometry.TabCheckX, 0)
     row.Up = ArrowButton(row, "Up")
     row.Down = ArrowButton(row, "Down")
     row.Down:SetPoint("LEFT", row.Up, "RIGHT", 4, 0)
-    return Finish(row, lib.Mixins.TabRow, { OnLoad = "OnLoad", OnEnter = "OnEnter", OnLeave = "OnLeave" })
+    return Finish(row, lib.Internal.Mixins.TabRow, { OnLoad = "OnLoad", OnEnter = "OnEnter", OnLeave = "OnLeave" })
 end
 
 -- [[ The search results ]] --
@@ -339,7 +343,8 @@ function build.SearchHeadingRow(parent)
     row.MouseoverOverlay:Hide()
     row.Title = Text(row, "ARTWORK", "GameFontNormalLarge", "LEFT", "TOP")
     row.Title:SetPoint("TOPLEFT", 16, -16)
-    return Finish(row, lib.Mixins.SearchHeadingRow, { OnClick = "OnClick", OnEnter = "OnEnter", OnLeave = "OnLeave" })
+    return Finish(row, lib.Internal.Mixins.SearchHeadingRow,
+        { OnClick = "OnClick", OnEnter = "OnEnter", OnLeave = "OnLeave" })
 end
 
 function build.LinkRow(parent)
@@ -356,7 +361,7 @@ function build.LinkRow(parent)
     highlight:SetBlendMode("ADD") -- an XML HighlightTexture's own
     highlight:SetAllPoints()
     row:SetHighlightTexture(highlight)
-    return Finish(row, lib.Mixins.LinkRow, { OnClick = "OnClick" })
+    return Finish(row, lib.Internal.Mixins.LinkRow, { OnClick = "OnClick" })
 end
 
 -- [[ Cards ]] --
@@ -372,7 +377,7 @@ local cardEdges = { -- size (width or height), two anchors (point, x, y)
 }
 
 function build.Card(parent)
-    local geometry = lib.Geometry
+    local geometry = lib.Internal.Geometry
     local card = CreateFrame("Button", nil, parent)
     card.Fill = Color(card, "BACKGROUND", 0, 0, 0, 0.35)
     card.Fill:SetAllPoints()
@@ -410,11 +415,11 @@ function build.Card(parent)
     card.NewFeature:SetSize(1, 1)
     card.NewFeature:SetPoint("RIGHT", card.PictureArea, "BOTTOMRIGHT", -11.25, -17.5)
     card.NewFeature:Hide()
-    return Finish(card, lib.Mixins.Card, { OnClick = "OnClick", OnEnter = "OnEnter", OnLeave = "OnLeave" })
+    return Finish(card, lib.Internal.Mixins.Card, { OnClick = "OnClick", OnEnter = "OnEnter", OnLeave = "OnLeave" })
 end
 
 -- A row of cards, made in OnLoad (RowMixins.lua) as the grid row makes its check boxes
 function build.CardRow(parent)
     local row = Row("Frame", parent)
-    return Finish(row, lib.Mixins.CardRow, { OnLoad = "OnLoad" })
+    return Finish(row, lib.Internal.Mixins.CardRow, { OnLoad = "OnLoad" })
 end

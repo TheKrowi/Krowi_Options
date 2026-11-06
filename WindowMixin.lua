@@ -19,6 +19,9 @@ if not KROWI_LIBMAN then return end
 local sub, lib = KROWI_LIBMAN:NewSubmodule("WindowMixin", 0)
 if not sub then return end
 
+-- What is not the public surface lives under lib.Internal (Krowi_Options.lua)
+lib.Internal = lib.Internal or {}
+
 -- A call into the addon whose tab is open: its error goes to the game's error handler and the window goes on with what
 -- it got (Krowi_Options.lua, Protected; each file that needs it has its own)
 local function Protected(func, ...)
@@ -35,11 +38,11 @@ end
 
 -- [[ The window ]] --
 -- Every file of the window adds its methods to this one table: this core, and its parts (WindowLayout.lua,
--- WindowPage.lua, WindowSearch.lua, WindowHelp.lua). Each mixin table on lib.Mixins is added to, never replaced: a
--- newer copy of a file loaded second would otherwise empty a table an older copy filled, and with the window's code
--- split over several files an unchanged file at an equal minor never runs again to fill it.
-lib.Mixins.Window = lib.Mixins.Window or {}
-local WindowMixin = lib.Mixins.Window
+-- WindowPage.lua, WindowSearch.lua, WindowHelp.lua). Each mixin table on lib.Internal.Mixins is added to, never
+-- replaced: a newer copy of a file loaded second would otherwise empty a table an older copy filled, and with the
+-- window's code split over several files an unchanged file at an equal minor never runs again to fill it.
+lib.Internal.Mixins.Window = lib.Internal.Mixins.Window or {}
+local WindowMixin = lib.Internal.Mixins.Window
 
 function WindowMixin:OnLoad()
     -- A plain Hide on both: HideUIPanel, the template's own, refuses addon code in combat
@@ -57,10 +60,10 @@ function WindowMixin:OnLoad()
 end
 
 -- The window's own state: the newest of the addons' blocks, its fields checked already (Krowi_Options.lua, ReadWindow);
--- every addon keeps a copy (lib.SetShared). Of the size only the height is kept, at least lib.Geometry.MinHeight
--- (Kinds.lua) as the layout keeps it (WindowLayout.lua): the width follows the pane alone.
+-- every addon keeps a copy (lib.Internal.SetShared). Of the size only the height is kept, at least
+-- lib.Internal.Geometry.MinHeight (Kinds.lua) as in the layout (WindowLayout.lua): the width follows the pane alone.
 function WindowMixin:Init(window)
-    if window.Size then self:SetHeight(math.max(window.Size[2], lib.Geometry.MinHeight)) end
+    if window.Size then self:SetHeight(math.max(window.Size[2], lib.Internal.Geometry.MinHeight)) end
     self.PaneCollapsed = window.PaneCollapsed and true or false
     self:ApplyWidth()
     if window.Point then
@@ -78,7 +81,7 @@ end
 -- A tab per registered addon where the game's window has Game and AddOns (Blizzard_SettingsPanel.xml). Our own click
 -- replaces MinimalTabTemplate's, which would let a click on the open tab unselect it.
 function WindowMixin:RefreshTabs()
-    local tabs = lib.Tabs
+    local tabs = lib.Internal.Tabs
     for i, tab in ipairs(tabs) do
         local button = self.TabButtons[i]
         if not button then
@@ -116,7 +119,7 @@ end
 -- Searching every tab means something only with a second tab: the check box shows from then on. The broad search's
 -- check box stands before it, or before Close until then, and the reload bar reaches to it.
 function WindowMixin:UpdateSearchAll()
-    local several = #lib.Tabs > 1
+    local several = #lib.Internal.Tabs > 1
     self.SearchAll:SetShown(several)
     self.SearchAllLabel:SetShown(several)
     self.SearchBroadLabel:ClearAllPoints()
@@ -211,5 +214,5 @@ end
 
 -- On the open tab, or the first one before any is open
 function WindowMixin:Open(sectionId)
-    self:ShowTab(self.Tab or lib.Tabs[1], sectionId)
+    self:ShowTab(self.Tab or lib.Internal.Tabs[1], sectionId)
 end

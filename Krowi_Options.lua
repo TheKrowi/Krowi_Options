@@ -24,13 +24,17 @@ local lib = KROWI_LIBMAN:NewLibrary('Krowi_Options_2', 0, {
 })
 if not lib then return end
 
--- The registered tabs, sorted by name, and the one window they share (lib.Frame, made on the first open). Both live on
--- lib, which a newer copy of the library keeps.
-lib.Tabs = lib.Tabs or {}
+-- Everything that is not the public surface (the config's comment below names it) lives under lib.Internal, so lib
+-- holds only the public names and what LibMan hangs on it (Tests/headless/suites/Structure.lua records both). Every
+-- file that writes into it makes it as here: it is added to, never replaced.
+lib.Internal = lib.Internal or {}
+-- The registered tabs, sorted by name, and the one window they share (lib.Internal.Frame, made on the first open). Both
+-- live on lib, which a newer copy of the library keeps.
+lib.Internal.Tabs = lib.Internal.Tabs or {}
 -- The tabs' methods (below), the rows' and the window's mixins (RowMixins.lua, WindowMixin.lua) and their builders
 -- (RowFrames.lua, WindowFrame.lua)
-lib.Mixins = lib.Mixins or {}
-lib.Build = lib.Build or {}
+lib.Internal.Mixins = lib.Internal.Mixins or {}
+lib.Internal.Build = lib.Internal.Build or {}
 -- The window's frame name, the library's only global (Blizzard's templates name a few children after it, CLAUDE.md),
 -- here so an addon can read it before the window is made. Not Krowi_Options 1's Krowi_OptionsWindow, so an older
 -- addon's 1.x window keeps its own.
@@ -93,8 +97,8 @@ lib.Markup = {
 
 -- The tabs' methods, kept on lib: an addon registers its tab while it loads, before a later addon's newer copy of this
 -- file runs, and that copy's methods replace these on the table every tab's metatable is
-lib.Mixins.Tab = lib.Mixins.Tab or {}
-local tab = lib.Mixins.Tab
+lib.Internal.Mixins.Tab = lib.Internal.Mixins.Tab or {}
+local tab = lib.Internal.Mixins.Tab
 tab.__index = tab
 
 -- A call into an addon: its error goes to the game's error handler with its stack (BugSack, or the game's error frame
@@ -131,16 +135,16 @@ local function OtherSaved(registered)
 end
 
 function tab:GetFrame()
-    return lib.GetFrame(self)
+    return lib.Internal.GetFrame(self)
 end
 
 function tab:Open(sectionId)
-    lib.GetFrame(self):ShowTab(self, sectionId)
+    lib.Internal.GetFrame(self):ShowTab(self, sectionId)
 end
 
 function tab:Toggle(sectionId)
     if self:IsShown() then
-        lib.Frame:Hide()
+        lib.Internal.Frame:Hide()
     else
         self:Open(sectionId)
     end
@@ -148,27 +152,27 @@ end
 
 -- Shown on this tab; the window can be open on another addon's
 function tab:IsShown()
-    local frame = lib.Frame
+    local frame = lib.Internal.Frame
     return frame and frame:IsShown() and frame.Tab == self or false
 end
 
 function tab:Refresh()
-    if self:IsShown() then lib.Frame:Refresh() end
+    if self:IsShown() then lib.Internal.Frame:Refresh() end
 end
 
 -- For the tests: a tab registered for a scenario goes again
 function tab:Unregister()
-    for i, registered in ipairs(lib.Tabs) do
+    for i, registered in ipairs(lib.Internal.Tabs) do
         if registered == self then
-            tremove(lib.Tabs, i)
+            tremove(lib.Internal.Tabs, i)
             break
         end
     end
-    if lib.Frame then lib.Frame:RefreshTabs() end
+    if lib.Internal.Frame then lib.Internal.Frame:RefreshTabs() end
 end
 
 local function SortTabs()
-    table.sort(lib.Tabs, function(a, b) return a.Config.TabName < b.Config.TabName end)
+    table.sort(lib.Internal.Tabs, function(a, b) return a.Config.TabName < b.Config.TabName end)
 end
 
 -- [[ The window's shared state: saved.Window in every addon's table, the newest change winning ]] --
@@ -210,23 +214,24 @@ local function CopyWindow(window)
 end
 
 -- The state the window shows: on its first need the newest block among the tabs' tables (one without a change time
--- counts as the oldest), afterwards the one the window keeps. Kept on lib, which a newer copy of this file keeps.
+-- counts as the oldest), afterwards the one the window keeps (lib.Internal.Shared). Kept on lib, which a newer copy of
+-- this file keeps.
 local function Shared()
-    if not lib.Shared then
+    if not lib.Internal.Shared then
         local newest
-        for _, registered in ipairs(lib.Tabs) do
+        for _, registered in ipairs(lib.Internal.Tabs) do
             local window = ReadWindow(OtherSaved(registered))
             if window and (not newest or (window.Changed or 0) > (newest.Changed or 0)) then newest = window end
         end
-        lib.Shared = newest or {}
+        lib.Internal.Shared = newest or {}
     end
-    return lib.Shared
+    return lib.Internal.Shared
 end
 
 -- Every addon's table gets its own copy, so one addon's table never holds another's
 local function WriteShared()
     local window = Shared()
-    for _, registered in ipairs(lib.Tabs) do
+    for _, registered in ipairs(lib.Internal.Tabs) do
         local saved = OtherSaved(registered)
         if saved then saved.Window = CopyWindow(window) end
     end
@@ -235,7 +240,7 @@ end
 -- One of the window's settings changed: the whole block, stamped with the time, goes into every tab that has its saved
 -- table, so any one addon alone still opens the window as the player left it. A tab whose table is not there yet gets
 -- the next change.
-function lib.SetShared(key, value)
+function lib.Internal.SetShared(key, value)
     local window = Shared()
     window[key] = value
     window.Changed = time()
@@ -273,13 +278,13 @@ end
 function lib.CreateWindow(config)
     CheckConfig(config)
     local registered = setmetatable({ Config = config }, tab)
-    tinsert(lib.Tabs, registered)
+    tinsert(lib.Internal.Tabs, registered)
     SortTabs()
-    if lib.Frame then
+    if lib.Internal.Frame then
         local saved = OtherSaved(registered)
         if saved then saved.Window = CopyWindow(Shared()) end
-        if config.OnCreated then Protected(config.OnCreated, lib.Frame) end
-        lib.Frame:RefreshTabs()
+        if config.OnCreated then Protected(config.OnCreated, lib.Internal.Frame) end
+        lib.Internal.Frame:RefreshTabs()
     end
     return registered
 end
@@ -324,23 +329,23 @@ function lib.GetStrings()
 end
 
 -- The window, made on its first need in the place the newest of the addons' blocks remembers. The opening tab's saved
--- table comes first: a tab without one stops here, before a frame is made under the window's name. lib.Frame is set as
--- soon as the frame exists, so a later error never makes a second window. The OnCreated calls run over the tabs as they
--- were: an OnCreated that registers another tab gets that tab's OnCreated from CreateWindow, once.
-function lib.GetFrame(opening)
-    if not lib.Frame then
-        (opening or lib.Tabs[1]):GetSaved()
+-- table comes first: a tab without one stops here, before a frame is made under the window's name. lib.Internal.Frame
+-- is set as soon as the frame exists, so a later error never makes a second window. The OnCreated calls run over the
+-- tabs as they were: an OnCreated that registers another tab gets that tab's OnCreated from CreateWindow, once.
+function lib.Internal.GetFrame(opening)
+    if not lib.Internal.Frame then
+        (opening or lib.Internal.Tabs[1]):GetSaved()
         local window = Shared()
-        local frame = lib.Build.Window()
-        lib.Frame = frame
+        local frame = lib.Internal.Build.Window()
+        lib.Internal.Frame = frame
         Protected(frame.Init, frame, window) -- the checked block cannot make it fail; if it does, every tab still gets OnCreated
         WriteShared()
         local tabs = {}
-        for i, registered in ipairs(lib.Tabs) do tabs[i] = registered end
+        for i, registered in ipairs(lib.Internal.Tabs) do tabs[i] = registered end
         for _, registered in ipairs(tabs) do
             if registered.Config.OnCreated then Protected(registered.Config.OnCreated, frame) end
         end
         frame:RefreshTabs()
     end
-    return lib.Frame
+    return lib.Internal.Frame
 end

@@ -5,14 +5,17 @@
 
 ---@diagnostic disable: undefined-global
 
--- The window's search (WindowMixin.lua is the window's core): what lib.Search (Search.lua) finds, as the page's rows;
--- the search box, which starts and ends a search; and the check boxes for its scope and breadth. Its state on the
--- window: Searching, SearchEveryTab and BroadSearch.
+-- The window's search (WindowMixin.lua is the window's core): what lib.Internal.Search (Search.lua) finds, as the
+-- page's rows; the search box, which starts and ends a search; and the check boxes for its scope and breadth. Its state
+-- on the window: Searching, SearchEveryTab and BroadSearch.
 
 -- A standalone install loaded before any Krowi addon has no KROWI_LIBMAN and nothing to serve (Krowi_Options.lua)
 if not KROWI_LIBMAN then return end
 local sub, lib = KROWI_LIBMAN:NewSubmodule("WindowSearch", 0)
 if not sub then return end
+
+-- What is not the public surface lives under lib.Internal (Krowi_Options.lua)
+lib.Internal = lib.Internal or {}
 
 -- A call into the addon whose tab is open: its error goes to the game's error handler and the window goes on with what
 -- it got (Krowi_Options.lua, Protected; each file that needs it has its own)
@@ -23,8 +26,8 @@ end
 
 -- [[ The window ]] --
 -- Every file of the window adds its methods to this one table (WindowMixin.lua)
-lib.Mixins.Window = lib.Mixins.Window or {}
-local WindowMixin = lib.Mixins.Window
+lib.Internal.Mixins.Window = lib.Internal.Mixins.Window or {}
+local WindowMixin = lib.Internal.Mixins.Window
 
 -- The search box and its check boxes, set up as the window is built (OnLoad, WindowMixin.lua)
 function WindowMixin:LoadSearch()
@@ -35,13 +38,13 @@ function WindowMixin:LoadSearch()
     -- Every tab instead of the selected one (unticked by default); kept for every addon like the window's place
     self.SearchAll:SetScript("OnClick", function(button)
         self.SearchEveryTab = button:GetChecked() and true or false
-        lib.SetShared("SearchAll", self.SearchEveryTab)
+        lib.Internal.SetShared("SearchAll", self.SearchEveryTab)
         if self.Searching then self:OnSearch(self.SearchBox:GetText()) end
     end)
     -- Descriptions too (unticked by default: the game's search finds names only); kept like the scope
     self.SearchBroad:SetScript("OnClick", function(button)
         self.BroadSearch = button:GetChecked() and true or false
-        lib.SetShared("SearchBroad", self.BroadSearch)
+        lib.Internal.SetShared("SearchBroad", self.BroadSearch)
         if self.Searching then self:OnSearch(self.SearchBox:GetText()) end
     end)
 end
@@ -51,10 +54,10 @@ end
 -- "Search all tabs" ticked every tab under its addon's name; each section's name, which opens it, then its found rows,
 -- working as on its page, under the headings they stand under there
 function WindowMixin:SearchElements(text)
-    local everyTab = self.SearchEveryTab and #lib.Tabs > 1
+    local everyTab = self.SearchEveryTab and #lib.Internal.Tabs > 1
     local list = {}
     local broad = self.BroadSearch
-    for _, group in ipairs(lib.Search(text, everyTab, self.Tab, broad)) do
+    for _, group in ipairs(lib.Internal.Search(text, everyTab, self.Tab, broad)) do
         local tab = group.Tab
         if everyTab then list[#list + 1] = { Kind = "Header", Text = tab.Config.TabName } end
         for _, section in ipairs(group.Sections) do

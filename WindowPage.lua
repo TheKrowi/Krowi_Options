@@ -16,6 +16,9 @@ if not KROWI_LIBMAN then return end
 local sub, lib = KROWI_LIBMAN:NewSubmodule("WindowPage", 0)
 if not sub then return end
 
+-- What is not the public surface lives under lib.Internal (Krowi_Options.lua)
+lib.Internal = lib.Internal or {}
+
 -- A call into the addon whose tab is open: its error goes to the game's error handler and the window goes on with what
 -- it got (Krowi_Options.lua, Protected; each file that needs it has its own)
 local function Protected(func, ...)
@@ -32,11 +35,11 @@ end
 
 -- [[ Navigation ]] --
 -- The game's category list (Blizzard_CategoryList.lua): a group under a header bar, a section gold, the selected one
--- white on the active bar, the hovered one on the hover bar. Each mixin table on lib.Mixins is added to, never replaced:
--- a newer copy of a file loaded second would otherwise empty a table an older copy filled, and with the window's code
--- split over several files an unchanged file at an equal minor never runs again to fill it.
-lib.Mixins.NavButton = lib.Mixins.NavButton or {}
-local NavButtonMixin = lib.Mixins.NavButton
+-- white on the active bar, the hovered one on the hover bar. Each mixin table on lib.Internal.Mixins is added to, never
+-- replaced: a newer copy of a file loaded second would otherwise empty a table an older copy filled, and with the
+-- window's code split over several files an unchanged file at an equal minor never runs again to fill it.
+lib.Internal.Mixins.NavButton = lib.Internal.Mixins.NavButton or {}
+local NavButtonMixin = lib.Internal.Mixins.NavButton
 
 function NavButtonMixin:Init(element, window)
     self.Element, self.Window = element, window
@@ -77,8 +80,8 @@ function NavButtonMixin:OnClick()
     self.Window:ShowSection(self.Element.Id)
 end
 
-lib.Mixins.NavHeader = lib.Mixins.NavHeader or {}
-local NavHeaderMixin = lib.Mixins.NavHeader
+lib.Internal.Mixins.NavHeader = lib.Internal.Mixins.NavHeader or {}
+local NavHeaderMixin = lib.Internal.Mixins.NavHeader
 
 function NavHeaderMixin:Init(element)
     self.Label:SetText(element.Text)
@@ -87,8 +90,8 @@ end
 
 -- [[ The window ]] --
 -- Every file of the window adds its methods to this one table (WindowMixin.lua)
-lib.Mixins.Window = lib.Mixins.Window or {}
-local WindowMixin = lib.Mixins.Window
+lib.Internal.Mixins.Window = lib.Internal.Mixins.Window or {}
+local WindowMixin = lib.Internal.Mixins.Window
 
 -- The page header's buttons and the reload bar's, set up as the window is built (OnLoad, WindowMixin.lua)
 function WindowMixin:LoadPage()
@@ -112,10 +115,10 @@ function WindowMixin:RefreshNav()
     self.NavScrollBox:SetDataProvider(CreateDataProvider(list), ScrollBoxConstants.RetainScrollPosition)
 end
 
--- A section's rows as drawn (lib.Flatten, Kinds.lua): grids, tab lists and cards as several rows, hidden options left
--- out, and only the kinds the page draws
+-- A section's rows as drawn (lib.Internal.Flatten, Kinds.lua): grids, tab lists and cards as several rows, hidden
+-- options left out, and only the kinds the page draws
 local function Flatten(elements)
-    return lib.Flatten(elements, lib.Kinds)
+    return lib.Internal.Flatten(elements, lib.Internal.Kinds)
 end
 
 -- keepSearchText: a search ended by emptying the box keeps the spaces left in it
@@ -144,7 +147,7 @@ end
 local function Signature(elements)
     local parts = {}
     for i, element in ipairs(elements) do
-        local kind = lib.Kinds[element.Kind]
+        local kind = lib.Internal.Kinds[element.Kind]
         local option, with
         if kind and kind.Options then option, with = kind.Options(element) end
         local beside = with and not with:IsHidden() and ("+" .. (with.Id or "")) or "" -- shown with its row

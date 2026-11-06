@@ -64,6 +64,13 @@ local function Lib()
     return KROWI_LIBMAN:GetLibrary("Krowi_Options_2")
 end
 
+-- The library's internals: lib.Internal, or lib itself on a copy from before they moved there (a consumer's older
+-- embedded copy can be the one under test)
+local function Internal(lib)
+    lib = lib or Lib()
+    return lib.Internal or lib
+end
+
 local function Add(status, text)
     tinsert(live.Results, {
         Name = "live-" .. live.StepName,
@@ -165,7 +172,7 @@ local function RowLayout(row)
     end
     local wrong, firstLeft = {}, nil
     if row.Geometry and row.Select and row.Select:IsShown() then
-        local line = row:GetLeft() + Lib().RowX(row.Geometry.Toggle, row:GetWidth())
+        local line = row:GetLeft() + Internal().RowX(row.Geometry.Toggle, row:GetWidth())
         if math.abs(row.Select.DecrementButton:GetLeft() - line - 2.5) > 0.5 then
             tinsert(wrong, ("arrow %g from the check boxes' line"):format(row.Select.DecrementButton:GetLeft() - line))
         end
@@ -632,11 +639,12 @@ end
 
 -- A word of an option's description that no option's name holds, so only the broad search finds it
 local function DescriptionOnlyWord()
-    local lib = Lib()
+    local internal = Internal()
     for _, optionId in ipairs({ toggleId, rangeId, tabPriorityId }) do
         local _, option = FindOption(optionId)
         for word in (option and option:GetDescription() or ""):gmatch("[^%s%p]+") do
-            if #word >= 5 and #lib.Search(word, false, fixtures.Tab, false) == 0 and #lib.Search(word, false, fixtures.Tab, true) > 0 then return word end
+            if #word >= 5 and #internal.Search(word, false, fixtures.Tab, false) == 0
+                and #internal.Search(word, false, fixtures.Tab, true) > 0 then return word end
         end
     end
 end
@@ -999,7 +1007,7 @@ local function BuildSteps()
             Run = function() end,
             Check = function()
                 local frame = Window()
-                local lib = Lib()
+                local internal = Internal()
                 local shown, selected = 0, "none"
                 for _, button in ipairs(frame.TabButtons) do
                     if button:IsShown() then
@@ -1009,9 +1017,9 @@ local function BuildSteps()
                 end
                 local title = frame.NineSlice.Text:GetText()
                 local searchAll = frame.SearchAll:IsShown()
-                local ok = shown == #lib.Tabs and frame.Tab == fixtures.Tab and selected == fixtures.TabName
-                    and title == SETTINGS_TITLE and searchAll == (#lib.Tabs > 1)
-                Add(ok and "PASS" or "FAIL", ("%d of %d tabs shown, %s selected, title '%s', Search all tabs %s"):format(shown, #lib.Tabs, selected,
+                local ok = shown == #internal.Tabs and frame.Tab == fixtures.Tab and selected == fixtures.TabName
+                    and title == SETTINGS_TITLE and searchAll == (#internal.Tabs > 1)
+                Add(ok and "PASS" or "FAIL", ("%d of %d tabs shown, %s selected, title '%s', Search all tabs %s"):format(shown, #internal.Tabs, selected,
                     tostring(title), searchAll and "shown" or "hidden"))
             end
         },
@@ -1022,9 +1030,9 @@ local function BuildSteps()
             Run = function() end,
             Check = function()
                 local frame = Window()
-                local lib = Lib()
+                local internal = Internal()
                 local function Is(value, expected) return math.abs(value - expected) < 0.5 end
-                local width = lib.WindowWidth(frame.PaneCollapsed)
+                local width = internal.WindowWidth(frame.PaneCollapsed)
                 local minWidth, _, maxWidth = width, nil, width
                 if frame.GetResizeBounds then minWidth, _, maxWidth = frame:GetResizeBounds() end
                 local rows = frame.NavScrollShown and 619 or 635
@@ -1097,7 +1105,7 @@ local function BuildSteps()
             local frame = Window()
             local agrees = frame.ExpandButton:IsShown() == frame.PaneCollapsed and frame.HelpScrollBox:IsShown() == not frame.PaneCollapsed
             -- The pane adds its own width to the game's window (docs/work/2026-11-02-options-widths)
-            local width = Lib().WindowWidth(frame.PaneCollapsed)
+            local width = Internal().WindowWidth(frame.PaneCollapsed)
             local wide = math.abs(frame:GetWidth() - width) < 0.5 and math.abs(frame:PageWidth() - (frame.NavScrollShown and 619 or 635)) < 0.5
             Add(agrees and wide and "PASS" or "FAIL", ("the pane is %s and shows it, the window %g wide (%g expected), rows %g"):format(
                 frame.PaneCollapsed and "collapsed" or "open", frame:GetWidth(), width, frame:PageWidth()))
@@ -1140,13 +1148,13 @@ end
 -- saved block (internals, read knowingly; docs/work/2026-11-05-contract-and-errors). Restore puts them back as they
 -- were, so neither this addon's table nor another's keeps the run's values or a newer change time.
 local function SnapshotShared()
-    local lib = Lib()
+    local internal = Internal()
     local blocks = {}
-    for _, registered in ipairs(lib.Tabs) do
+    for _, registered in ipairs(internal.Tabs) do
         local ok, saved = pcall(registered.GetSaved, registered)
         if ok then blocks[registered] = saved.Window and DeepCopy(saved.Window) or false end
     end
-    return { Shared = DeepCopy(lib.Shared), Blocks = blocks }
+    return { Shared = DeepCopy(internal.Shared), Blocks = blocks }
 end
 
 -- Every value the steps changed goes back, then the window's saved state as it was before the run
@@ -1171,7 +1179,7 @@ local function Restore()
         frame.SearchEveryTab = before.SearchAll and true or false
         frame.SearchAll:SetChecked(frame.SearchEveryTab)
         local was = live.WasShown
-        if was and tContains(Lib().Tabs, was.Tab) then
+        if was and tContains(Internal().Tabs, was.Tab) then
             frame:ShowTab(was.Tab, was.Section)
         end
     end
@@ -1185,7 +1193,7 @@ local function Restore()
         local ok, savedTable = pcall(registered.GetSaved, registered)
         if ok then savedTable.Window = block and DeepCopy(block) or nil end
     end
-    Lib().Shared = DeepCopy(shared.Shared)
+    Internal().Shared = DeepCopy(shared.Shared)
     return notBack
 end
 

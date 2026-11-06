@@ -6,8 +6,8 @@
 ---@diagnostic disable: undefined-global
 
 -- The element kinds of a section's page (what an addon writes in each: RowMixins.lua's header), one entry each in
--- lib.Kinds:
---   Build         the builder of the kind's row: a name on lib.Build (RowFrames.lua), looked up for each row
+-- lib.Internal.Kinds:
+--   Build         the builder of the kind's row: a name on lib.Internal.Build (RowFrames.lua), looked up for each row
 --   Height        the row's height in the list: a number, or function(window, element) for a row as tall as its content
 --   Expand        function(element, list): a kind drawn as several rows (cards, a grid, a tab list) adds them to list
 --   Hidden        function(element): true leaves the element out of the page and the search
@@ -21,23 +21,26 @@
 --                 the grid above it, 2 for one that does not), Indented (it hangs under its option's parent or the row
 --                 above it with a smaller indent), BringsMembers (found, it brings its member options), Columns (a grid's
 --                 column titles) and UnderColumns (a grid row, which hangs under the titles above it)
--- Only this file writes lib.Kinds, and each entry whole, so the newest copy of this file decides every kind and no entry
--- mixes two copies. A newer copy that adds a kind raises this file, RowFrames.lua and RowMixins.lua together. What the
--- kinds make of a section's elements (lib.Flatten) and the lists' pooling (lib.InitList) are here too: they need the
--- kinds, not the window.
+-- Only this file writes lib.Internal.Kinds, and each entry whole, so the newest copy of this file decides every kind
+-- and no entry mixes two copies. A newer copy that adds a kind raises this file, RowFrames.lua and RowMixins.lua
+-- together. What the kinds make of a section's elements (lib.Internal.Flatten) and the lists' pooling
+-- (lib.Internal.InitList) are here too: they need the kinds, not the window.
 
 -- A standalone install loaded before any Krowi addon has no KROWI_LIBMAN and nothing to serve (Krowi_Options.lua)
 if not KROWI_LIBMAN then return end
--- Not "Kinds": LibMan hangs the submodule on lib under its name, where lib.Kinds is the table of kinds below
+-- Not "Kinds": LibMan hangs the submodule on lib under its name, where lib.Internal.Kinds is the table of kinds below
 local sub, lib = KROWI_LIBMAN:NewSubmodule("ElementKinds", 0)
 if not sub then return end
 
+-- What is not the public surface lives under lib.Internal (Krowi_Options.lua)
+lib.Internal = lib.Internal or {}
+
 -- [[ Geometry ]] --
 -- The numbers that a row's builder (RowFrames.lua) and its mixin (RowMixins.lua), or two parts of the window, both use,
--- once. Each entry is a plain value, written by this file only; every other file reads it where it uses it, never into a
--- local at load, so the numbers of the newest copy of this file are the ones every file draws with.
-lib.Geometry = lib.Geometry or {}
-local geometry = lib.Geometry
+-- once. Each entry is a plain value, written by this file only; every other file reads it where it uses it, never into
+-- a local at load, so the numbers of the newest copy of this file are the ones every file draws with.
+lib.Internal.Geometry = lib.Internal.Geometry or {}
+local geometry = lib.Internal.Geometry
 -- A card's picture area, under its 1 px border (RowFrames.lua's Card; RowMixins.lua's CardCrop and CardRowHeight)
 geometry.CardPictureHeight = 86
 -- A card's border and the line under its picture (RowFrames.lua's Card), and the border again when the mouse leaves the
@@ -54,8 +57,8 @@ geometry.WithSliderWidth = 214
 geometry.HelpWidth = 380
 geometry.MinHeight = 560
 
-lib.Kinds = lib.Kinds or {}
-local kinds = lib.Kinds
+lib.Internal.Kinds = lib.Internal.Kinds or {}
+local kinds = lib.Internal.Kinds
 
 -- [[ Headings and text ]] --
 kinds.Header = { Build = "HeaderRow", Height = 34, Search = { Heading = 1 } }
@@ -129,9 +132,9 @@ kinds.TabRow = {
 -- [[ A link ]] --
 kinds.Link = { Build = "LinkRow", Height = 26 }
 
--- [[ Cards: three to a row (lib.CardColumns, RowMixins.lua), each row as tall as its tallest card ]] --
+-- [[ Cards: three to a row (lib.Internal.CardColumns, RowMixins.lua), each row as tall as its tallest card ]] --
 kinds.Cards = { Expand = function(element, list)
-    local cards, columns = element.Cards, lib.CardColumns
+    local cards, columns = element.Cards, lib.Internal.CardColumns
     for first = 1, #cards, columns do
         local row, names = { Kind = "CardRow", Cards = {} }, {}
         for i = first, math.min(first + columns - 1, #cards) do
@@ -143,7 +146,7 @@ kinds.Cards = { Expand = function(element, list)
     end
 end }
 kinds.CardRow = { Build = "CardRow", Height = function(window, element)
-    return lib.CardRowHeight(window, element)
+    return lib.Internal.CardRowHeight(window, element)
 end }
 
 -- [[ A section's name in the search results ]] --
@@ -151,12 +154,12 @@ kinds.SearchHeading = { Build = "SearchHeadingRow", Height = 45 }
 
 -- [[ A section's rows ]] --
 -- A section's elements as rows: a kind that expands as several rows, a hidden element left out. known: the kinds the
--- page draws (lib.Kinds), nil keeps every kind (the search's rows). A section without elements (GetElements gives nil)
--- has no rows.
-function lib.Flatten(elements, known)
+-- page draws (lib.Internal.Kinds), nil keeps every kind (the search's rows). A section without elements (GetElements
+-- gives nil) has no rows.
+function lib.Internal.Flatten(elements, known)
     local list = {}
     for _, element in ipairs(elements or {}) do
-        local kind = lib.Kinds[element.Kind]
+        local kind = lib.Internal.Kinds[element.Kind]
         if kind and kind.Expand then
             kind.Expand(element, list)
         elseif kind and kind.Hidden then
@@ -180,9 +183,9 @@ end
 -- header's frame could come back for an option row (Blizzard_SharedXMLBase FrameFactory.lua). So the list hands out a
 -- plain frame, and the row of the element's kind hangs on it as frame.Row, from a pool per kind; when the list lets the
 -- frame go, its row goes back (docs/work/2026-11-04-krowi-options-library). Code that walks a list's frames reads
--- frame.Row. listKinds: lib.Kinds for the page, or a table in its shape (Build, Height) for the window's other lists
--- (WindowMixin.lua); leftPad and spacing as CreateScrollBoxListLinearView takes them.
-function lib.InitList(window, scrollBox, scrollBar, listKinds, leftPad, spacing)
+-- frame.Row. listKinds: lib.Internal.Kinds for the page, or a table in its shape (Build, Height) for the window's other
+-- lists (WindowMixin.lua); leftPad and spacing as CreateScrollBoxListLinearView takes them.
+function lib.Internal.InitList(window, scrollBox, scrollBar, listKinds, leftPad, spacing)
     local free = {} -- per kind, the rows not hung on a frame
     local function Release(host)
         local row = host.Row
@@ -202,7 +205,7 @@ function lib.InitList(window, scrollBox, scrollBar, listKinds, leftPad, spacing)
             if not row then
                 row = free[kind] and tremove(free[kind])
                 if not row then
-                    row = lib.Build[listKinds[kind].Build](host)
+                    row = lib.Internal.Build[listKinds[kind].Build](host)
                     row.ListKind = kind
                 end
                 row:SetParent(host)

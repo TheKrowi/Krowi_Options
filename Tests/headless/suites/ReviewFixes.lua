@@ -14,7 +14,8 @@ local Read, Run, Replace, Noop, NIL = h.Read, h.Run, h.Replace, h.Noop, h.NIL
 local root, handled, libraryFiles = h.root, h.handled, h.libraryFiles
 local LoadCopy, Option, Config, Window, StandInWindows = h.LoadCopy, h.Option, h.Config, h.Window, h.StandInWindows
 local Recorder, Called, RecordFrames, PointOf, Check = h.Recorder, h.Called, h.RecordFrames, h.PointOf, h.Check
-Check("1", "the search ends on an option that is its own parent", function()
+local Internal = h.Internal -- the library's internals, lib.Internal
+Check("1","the search ends on an option that is its own parent", function()
     local lib = LoadCopy()
     local loop = Option("Loop")
     function loop:GetParent() return self end
@@ -27,7 +28,7 @@ Check("1", "the search ends on an option that is its own parent", function()
             error("no end after 2,000,000 instructions", 0)
         end
     end, "", 1000)
-    local ok, result = pcall(lib.Search, "loop", true, nil, false)
+    local ok, result = pcall(Internal(lib).Search, "loop", true, nil, false)
     debug.sethook()
     if not ok then return false, result end
     local rows = result[1] and #result[1].Sections[1].Rows or 0
@@ -48,20 +49,20 @@ Check("3", "the window's builders use a newer copy's RowFrames.lua (fixed in de2
         return source .. "\nlocal finish = build.Finish\nbuild.Finish = function(...) NEWER_FINISH = true return finish(...) end"
     end })
     RecordFrames()
-    lib.Build.HelpText(Recorder())
+    Internal(lib).Build.HelpText(Recorder())
     return NEWER_FINISH == true, NEWER_FINISH and "the newer Finish ran" or "the older Finish ran"
 end)
 
 Check("4a", "a tab whose Saved gives no table: no window is built, the error names the tab", function()
     local lib = LoadCopy()
     local built = 0
-    lib.Build.Window = function()
+    Internal(lib).Build.Window = function()
         built = built + 1
-        return setmetatable({ RefreshTabs = Noop }, { __index = lib.Mixins.Window })
+        return setmetatable({ RefreshTabs = Noop }, { __index = Internal(lib).Mixins.Window })
     end
     local tab = lib.CreateWindow(Config({ TabName = "Broken", Saved = function() return nil end }))
-    local _, message = pcall(lib.GetFrame, tab)
-    pcall(lib.GetFrame, tab)
+    local _, message = pcall(Internal(lib).GetFrame, tab)
+    pcall(Internal(lib).GetFrame, tab)
     local named = tostring(message):find("Broken", 1, true) ~= nil
     return built == 0 and named, ("%d window(s) built over two opens; %s"):format(built, tostring(message))
 end)
@@ -71,7 +72,7 @@ Check("4b", "a tab without a saved table leaves the other tabs' shared state sav
     local saved = {}
     lib.CreateWindow(Config({ TabName = "A", Saved = saved }))
     lib.CreateWindow(Config({ TabName = "B", Saved = function() return nil end }))
-    local ok, message = pcall(lib.SetShared, "Point", { "CENTER" })
+    local ok, message = pcall(Internal(lib).SetShared, "Point", { "CENTER" })
     -- The shared keys live in saved.Window since 2026-11-05-contract-and-errors
     local point = type(saved.Window) == "table" and saved.Window.Point
     return ok and point ~= nil, ok and (point and "A's table has Point" or "A's table lacks Point") or tostring(message)
@@ -81,7 +82,7 @@ Check("4c", "a config without GetElements is refused at CreateWindow, naming the
     local lib = LoadCopy()
     local ok, message = pcall(lib.CreateWindow, Config({ GetElements = NIL }))
     local named = not ok and tostring(message):find("GetElements", 1, true) ~= nil
-    return named and #lib.Tabs == 0, ok and "accepted" or tostring(message)
+    return named and #Internal(lib).Tabs == 0, ok and "accepted" or tostring(message)
 end)
 
 Check("5a", "a section whose GetElements gives nil shows an empty page", function()
@@ -146,7 +147,7 @@ end)
 Check("8", "a greyed-out control still passes the mouse to its row", function()
     local lib = LoadCopy()
     RecordFrames()
-    local option, grid, tab = lib.Build.OptionRow(Recorder()), lib.Build.GridRow(Recorder()), lib.Build.TabRow(Recorder())
+    local option, grid, tab = Internal(lib).Build.OptionRow(Recorder()), Internal(lib).Build.GridRow(Recorder()), Internal(lib).Build.TabRow(Recorder())
     local controls = {
         { "Toggle", option.Toggle }, { "Range.Back", option.Range.Back }, { "Range.Forward", option.Range.Forward },
         { "Select.Dropdown", option.Select.Dropdown }, { "Select.DecrementButton", option.Select.DecrementButton },
@@ -169,8 +170,8 @@ Check("9", "the window's global name is not Krowi_Options 1's, and lib.WindowNam
         if template == "SettingsFrameTemplate" then named = name end
         return Recorder()
     end
-    lib.Build.Finish = function(frame) return frame end -- the window's OnLoad needs a real frame
-    lib.Build.Window()
+    Internal(lib).Build.Finish = function(frame) return frame end -- the window's OnLoad needs a real frame
+    Internal(lib).Build.Window()
     return named ~= nil and named ~= "Krowi_OptionsWindow" and named == lib.WindowName,
         ("named %s, lib.WindowName %s"):format(tostring(named), tostring(lib.WindowName))
 end)

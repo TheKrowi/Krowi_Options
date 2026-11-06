@@ -16,6 +16,9 @@ if not KROWI_LIBMAN then return end
 local sub, lib = KROWI_LIBMAN:NewSubmodule("WindowHelp", 0)
 if not sub then return end
 
+-- What is not the public surface lives under lib.Internal (Krowi_Options.lua)
+lib.Internal = lib.Internal or {}
+
 -- A call into the addon whose tab is open: its error goes to the game's error handler and the window goes on with what
 -- it got (Krowi_Options.lua, Protected; each file that needs it has its own)
 local function Protected(func, ...)
@@ -31,8 +34,8 @@ local function Ask(fallback, func, ...)
 end
 
 -- [[ Help pane blocks ]] --
-lib.Mixins.HelpText = lib.Mixins.HelpText or {}
-local HelpTextMixin = lib.Mixins.HelpText
+lib.Internal.Mixins.HelpText = lib.Internal.Mixins.HelpText or {}
+local HelpTextMixin = lib.Internal.Mixins.HelpText
 
 function HelpTextMixin:Init(element)
     self.Text:SetFontObject(element.Font)
@@ -40,8 +43,8 @@ function HelpTextMixin:Init(element)
 end
 
 -- A picture enlarges on click (the window's lightbox); the magnifier cursor says so
-lib.Mixins.HelpPicture = lib.Mixins.HelpPicture or {}
-local HelpPictureMixin = lib.Mixins.HelpPicture
+lib.Internal.Mixins.HelpPicture = lib.Internal.Mixins.HelpPicture or {}
+local HelpPictureMixin = lib.Internal.Mixins.HelpPicture
 
 function HelpPictureMixin:Init(element, window)
     self.Element, self.Window = element, window
@@ -64,22 +67,22 @@ end
 
 -- [[ The window ]] --
 -- Every file of the window adds its methods to this one table (WindowMixin.lua)
-lib.Mixins.Window = lib.Mixins.Window or {}
-local WindowMixin = lib.Mixins.Window
+lib.Internal.Mixins.Window = lib.Internal.Mixins.Window or {}
+local WindowMixin = lib.Internal.Mixins.Window
 
--- The help pane's list draws its own kinds, in the shape of lib.Kinds (Kinds.lua): the builder of each row
--- (WindowFrame.lua) and its height. lib.InitList (Kinds.lua) pools them. The pane is lib.Geometry.HelpWidth wide
--- (Kinds.lua), as the window lays it out (WindowLayout.lua).
+-- The help pane's list draws its own kinds, in the shape of lib.Internal.Kinds (Kinds.lua): the builder of each row
+-- (WindowFrame.lua) and its height. lib.Internal.InitList (Kinds.lua) pools them. The pane is
+-- lib.Internal.Geometry.HelpWidth wide (Kinds.lua), as the window lays it out (WindowLayout.lua).
 local helpKinds = {
     HelpText = { Build = "HelpText", Height = function(window, element)
-        return window:MeasureText(element.Text, element.Font, lib.Geometry.HelpWidth - 52) + (element.Gap or 6)
+        return window:MeasureText(element.Text, element.Font, lib.Internal.Geometry.HelpWidth - 52) + (element.Gap or 6)
     end },
     HelpPicture = { Build = "HelpPicture", Height = function(_, element) return element.DrawHeight + 10 end },
 }
 
 -- The pane's list, the lightbox and Show me, set up as the window is built (OnLoad, WindowMixin.lua)
 function WindowMixin:LoadHelp()
-    self.HelpBar = lib.InitList(self, self.HelpScrollBox, self.HelpScrollBar, helpKinds)
+    self.HelpBar = lib.Internal.InitList(self, self.HelpScrollBox, self.HelpScrollBar, helpKinds)
     -- The help is filled while the pane is collapsed too, and its scroll bar would then show on the strip
     self.HelpBar:RegisterCallback(ManagedScrollBarVisibilityBehaviorMixin.Event.OnVisibilityChanged, function(_, shown)
         if shown and self.PaneCollapsed then self.HelpScrollBar:Hide() end
@@ -140,7 +143,7 @@ function WindowMixin:ShowSectionHelp()
     local blocks = {}
     local title = help and help.Title or (self.SectionId == "overview" and self.Strings.Overview or Ask(self.SectionId, self.Config.SectionName, self.SectionId))
     blocks[#blocks + 1] = TextBlock(title, "GameFontNormalLarge", 10)
-    local innerWidth = lib.Geometry.HelpWidth - 52
+    local innerWidth = lib.Internal.Geometry.HelpWidth - 52
     for _, block in ipairs(help and help.Blocks or {}) do
         if block.Picture then
             local width = math.min(block.Width or innerWidth, innerWidth)
@@ -280,7 +283,7 @@ end
 local function RowShows(row, option)
     if row.Option == option or row.With == option then return true end
     local element = row.Element
-    local kind = element and lib.Kinds[element.Kind]
+    local kind = element and lib.Internal.Kinds[element.Kind]
     if not kind then return false end
     if kind.Options and kind.Options(element) == option then return true end
     for _, cell in ipairs(kind.Cells and kind.Cells(element) or {}) do

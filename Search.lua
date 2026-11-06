@@ -13,9 +13,12 @@
 
 -- A standalone install loaded before any Krowi addon has no KROWI_LIBMAN and nothing to serve (Krowi_Options.lua)
 if not KROWI_LIBMAN then return end
--- Not "Search": LibMan hangs the submodule on lib under its name, where lib.Search is the search below
+-- Not "Search": LibMan hangs the submodule on lib under its name, where lib.Internal.Search is the search below
 local sub, lib = KROWI_LIBMAN:NewSubmodule("SearchModule", 0)
 if not sub then return end
+
+-- What is not the public surface lives under lib.Internal (Krowi_Options.lua)
+lib.Internal = lib.Internal or {}
 
 -- A call into an addon: its error goes to the game's error handler and the search goes on (Krowi_Options.lua, Protected;
 -- each file that needs it has its own)
@@ -43,12 +46,12 @@ end
 -- (Kinds.lua): an option's, and its check box's button text or slider name; a family heading's, a grid row's and a
 -- tab's. A kind without names is not searched.
 local function Names(element)
-    local kind = lib.Kinds[element.Kind]
+    local kind = lib.Internal.Kinds[element.Kind]
     if kind and kind.Names then return Texts(kind.Names(element)) end
 end
 
 local function Descriptions(element)
-    local kind = lib.Kinds[element.Kind]
+    local kind = lib.Internal.Kinds[element.Kind]
     if kind and kind.Descriptions then return Texts(kind.Descriptions(element)) end
     return {}
 end
@@ -56,7 +59,7 @@ end
 -- Where a row stands for the search, as its kind says (Kinds.lua, Search): a heading, a row that hangs under another
 local none = {}
 local function SearchFields(element)
-    local kind = lib.Kinds[element.Kind]
+    local kind = lib.Internal.Kinds[element.Kind]
     return kind and kind.Search or none
 end
 
@@ -107,7 +110,7 @@ end
 -- order, and these blocks gather under the heading they stand under on the page.
 local function SearchSection(tab, id, words, broad)
     local config = tab.Config
-    local elements = lib.Flatten(config.GetElements(id))
+    local elements = lib.Internal.Flatten(config.GetElements(id))
     local heading, headingIndex = "", 0
     local headingAt, groupAt, parentAt, rootAt = {}, {}, {}, {}
     local rowOf, subOf, atIndent, gridHeader = {}, {}, {}, nil -- an option's row, a member's All / None heading
@@ -218,13 +221,13 @@ end
 -- Heading and HeadingAt (which of the section's headings) added, so the window can tell whose it is and what it stands
 -- under. broad: descriptions too. A section whose elements, names or descriptions error is left out, and the error goes
 -- to the error handler.
-function lib.Search(text, all, current, broad)
+function lib.Internal.Search(text, all, current, broad)
     local whole = Plain(text or ""):gsub("^%s+", ""):gsub("%s+$", "")
     if whole == "" then return {} end
     local words = { whole }
     for word in whole:gmatch("[^, ]+") do words[#words + 1] = word end
     local groups = {}
-    for _, registered in ipairs(lib.Tabs) do
+    for _, registered in ipairs(lib.Internal.Tabs) do
         if all or registered == current then
             local sections, index = {}, 0
             for _, group in ipairs(registered.Config.Groups or {}) do

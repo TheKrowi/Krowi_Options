@@ -129,6 +129,12 @@ function h.LoadCopy(minors, edits)
     return KROWI_LIBMAN:GetLibrary("Krowi_Options_2")
 end
 
+-- The library's internals: lib.Internal, or lib itself on a copy from before they moved there, so a check reads them the
+-- same way on either (Krowi_AchievementFilter's tests do the same)
+function h.Internal(lib)
+    return lib.Internal or lib
+end
+
 -- An option with every method the window calls (RowMixins.lua's interface); extra fields replace them
 function h.Option(label, extra)
     local option = { Label = label, Type = "toggle", Indent = 0 }
@@ -157,7 +163,8 @@ function h.Config(extra)
     return config
 end
 
--- The window's methods (lib.Mixins.Window) on a stand-in for its frames; the parts a check does not look at do nothing
+-- The window's methods (lib.Internal.Mixins.Window) on a stand-in for its frames; the parts a check does not look at do
+-- nothing
 function h.Window(lib, fields)
     local window = {
         Strings = lib.GetStrings(),
@@ -173,13 +180,13 @@ function h.Window(lib, fields)
         window[method] = Noop
     end
     for key, value in pairs(fields or {}) do window[key] = value end
-    return setmetatable(window, { __index = lib.Mixins.Window })
+    return setmetatable(window, { __index = h.Internal(lib).Mixins.Window })
 end
 
--- lib.Build.Window as a stand-in window that counts how often it is built and records where it is placed
+-- lib.Internal.Build.Window as a stand-in window that counts how often it is built and records where it is placed
 function h.StandInWindows(lib)
     local built = { Count = 0 }
-    lib.Build.Window = function()
+    h.Internal(lib).Build.Window = function()
         built.Count = built.Count + 1
         built.Last = h.Window(lib, {
             SetPoint = function(_, ...) built.Point = { ... } end,
