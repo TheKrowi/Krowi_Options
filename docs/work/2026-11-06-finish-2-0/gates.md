@@ -15,3 +15,4 @@ Class: harness
 | 2026-11-06 | design | Internals under lib.Internal in 2.0 | yes | first: "I don't get the question and answers. Plan was to move options test to options and kaf only test the piblic stuff right for it's own addon?"; after the restatement: "Yes, in 2.0 (Recommended)" | took |
 | 2026-11-06 | design | The packaging exclusion list: a per-repo file read by the addon manager and the kit | _Packaging/Exclude.txt | first: "1. But why txt?"; after the restatement: "_Packaging/.pkgmeta" | other |
 | 2026-11-06 | plan | The plan: six phases, phase 1 in detail (exclusion list, harness, test addon, ported steps, paired kit, addon manager and KAF PRs), no full headless fake of the game's frames | approve | approved in plan mode | took |
+| 2026-11-06 | merge | Phase 1: Krowi_Options #5, then Krowi_AchievementFilter #399 | merge both, library first | "Merge both, library #5 first (Recommended)" | took |
