@@ -1,0 +1,56 @@
+# Plan: finish Krowi_Options 2.0
+Spec: [spec.md](spec.md). Status: accepted
+
+Intent and spec are accepted and committed (`8216b31`, branch `feature/2026-11-06-finish-2-0`, worktree under `Krowi_Libraries\Krowi_Options\.claude\worktrees\`). Class `library`. Six phases, each its own PR with a gate after it (Krowi). Phase 1 is planned in detail; phases 2-6 are ordered and get their step list refreshed at their own gate.
+
+## Context
+2.0 is merged but unreleased. Before release the library gets its own tests (KAF tests only what it can see), a structure that stops the 2.1 bug class, those bugs fixed, a smaller config contract, and Era, Anniversary and Forever. Facts from the exploration that shape the plan:
+- KAF's `options` suite has about 14 steps that are KAF's own (A), about 45 that test the library (B: search, geometry, window, hover, confirm, toggles, pane, close, tabs, sizes, strings, globals), and 5 mixed (C: `window-tabs`, `search-all-none`, `card-geometry`, `open`, section steps). B live steps are game-only (they read `frame.*`, `row.*`); B scenarios run headless in KAF.
+- The headless stand-in cannot build rows or a window: no real `CreateFrame` scripts, no ScrollBox, no templates, no `C_Timer`, no `hooksecurefunc`. `repro.lua` (two copies, 25 + 14 checks) has a hand-kept file list that duplicates `Krowi_Options.xml`.
+- The two-copy gate runs through KAF as consumer on Retail and Classic only; its smoke is KAF's `options smoke` + `escape`. `Deploy.ps1` has a hard-coded exclusion list and copies `.lua`/`.xml`, so a test addon in the repo would be deployed with the library. The zipper has no unit tests. No Krowi repo has a `.pkgmeta`.
+- Era and Anniversary cannot be started by the kit yet (only Retail, Mists, Forever families; memory `game-start-routes`).
+
+## Decisions this plan takes (veto at the gate)
+- **No full headless fake of the game's frames.** The refactor's proof is the method-name list of `lib.Mixins.Window`, the search/signature snapshot, a richer fixture-driven headless check of the logic that does run (Search, Flatten, Signature, config checks, minors), and the test addon in game on every client. Building a ScrollBox fake would cost more than the bugs it would catch and would still not prove the drawing.
+- **Step definitions are shared.** Scenarios that need no frames live in one file loaded both by the test addon and by the headless harness (as KAF's do); live steps are game-only.
+- **KAF keeps a public smoke** (window opens on KAF's tab, tabs listed, closes) so the two-copy gate keeps a KAF-side check.
+
+## Phase 1: tests (PR 1; paired PRs in kit, addon manager and KAF)
+Order matters: the exclusion list first, since the test addon sits in the repo.
+
+1. **Kit PR (Krowi_ClaudeKit):** `Deploy.ps1` reads `_Packaging/.pkgmeta`'s `ignore:` list (`- path` lines, `*` globs, `#` comments; other keys ignored; a repo without the file keeps the built-in list); a test case in the kit's tests; `WowAddons.md` line. Files: `tools/Deploy.ps1`, `tests/`.
+2. **Addon manager PR (Krowi_AddonManager):** same reader in `zipper.py` (parse before the two `_compress_*` calls; a file/glob check beside the dotfile and `.md` filters, at lines 63-73); first unit test of the exclusion (a script under `tests/`, run through `test.bat`). No release.
+3. **This repo, `_Packaging/.pkgmeta`:** `ignore:` with `- Tests`, and `.claude/tools`'s own scripts need no entry (`.claude` already excluded).
+4. **Headless harness** `Tests/headless/harness.lua`: from the 90 shared preamble lines of the two `repro.lua`; a loader that parses `Krowi_Options.xml` and `Localization\Files.xml` (`<Script>`, `<Include>`, in order) in place of the hand list; Krowi_Util loaded from its sibling checkout. `Tests/headless/run.lua` runs every suite file; exit 1 on any fail, `every check passes` on success. Both old `repro.lua` files move in as suites (their 39 checks stay as they are).
+5. **Test-first for phase 3.** One check per bug of spec requirements 10 and 11, written as a `Recorded`/`Target` scenario (the repo convention): it passes while the code behaves as recorded, so a fix is a reviewable diff of `Recorded` to `Target`. Plus the snapshot check (search results and each section's `Signature` on a fixture tab) and the method-name check of `lib.Mixins.Window` (a recorded sorted list) that phase 2 relies on, and a two-copy check that every window method survives when only a newer core file loads.
+6. **Test addon** `Tests/Krowi_OptionsTests/`: TOC (`## Interface:` of all five clients plus Titan, `SavedVariables: KrowiOptionsTests_Debug`), loader embedding the library from the repo root and Krowi_Util (needs `KROWI_LIBMAN`, AceLocale, `Krowi_Tooltip` 2.5+), `/kotest <step|smoke|run>` after KAF's `/kaftest` with its KrowiGameInput hooks, a banner, `Screenshot()`, `Remember`/`Restore`, last steps for BugGrabber and the library's Lua errors; fixture options and sections (Header, SubHeading, Sub, Note, Grid, TabList, Cards, Link, Option with toggle/range/input/select/key) replacing KAF's labels; a second fixture tab for `window-second-tab` and search across tabs.
+7. **Port the B steps** from KAF's `Tests/Options.lua` in groups, each green on Retail and Mists beside KAF's before KAF's copy is deleted: (a) scenarios: `window-width`, `library-strings`, `library-globals`, `row-geometry`, `search-*`, the `window-second-tab`, the library halves of `window-tabs`, `search-all-none`, `card-geometry`; (b) live: `open`, `library-globals-window`, `tabs`, `sizes`, `section-*` on fixture sections, `toggle*`, `range*`, `input*`, `slider-help`, `greyed-help*`, `search*`, `pane`, `close`, `restore`, `lua-errors`. `smokeSteps` and `behaviour` move too.
+8. **Tools in this repo's `.claude/tools/`:** `Deploy-TestAddon.ps1` (the test addon from the worktree plus the library to `...\Libs\Krowi_Options` and Krowi_Util to `...\Libs\Krowi_Util`, through the kit's `Deploy.ps1 -Destination`), `Run-GameTests.ps1` and `Read-GameTests.ps1` after KAF's/KEVU's pair (`/kotest run`, `Send-GameInput -WaitForDone`, `/reload`, read the saved variable and screenshots), `read-tests.lua`.
+9. **Paired KAF PR:** delete the B steps and the `smokeSteps` that read internals; keep A, the A residuals (`window-tabs` KAF name, `library-strings` `Config.Strings == nil`), and a public smoke (`open`, `tabs` by the public API, `close`); `run-tests.lua` headless keeps loading the real library. Update the kit's `TwoCopy.psd1` entry (kit PR) so the gate's smoke runs KAF's public smoke + `escape` and the test addon's smoke on the clients it can start.
+10. **Proof of phase 1** (spec 1-4): headless suite green on `222a553`'s code with the bug scenarios at `Recorded`; test addon green on Retail and Mists, run once beside KAF's old steps (same results per step) before deletion; KAF lint and headless suites green; BugGrabber clean; `Find-DeprecatedApi.ps1`; `/code-review`. **Gate 1.**
+
+## Phase 2: structure (PR 2, KAF pointer PR)
+Opus's ordered steps, each ending with syntax check, the headless suite and KAF's `options`/`escape` headless: (0) the harness reads `Krowi_Options.xml` (done in phase 1); (1) `lib.Mixins.Window = lib.Mixins.Window or {}` (`WindowMixin.lua:133`); (2) `Kinds.lua`: `rowKinds`, heights, `InitList`; (3) `Flatten` and the search fields, snapshot unchanged; (4) `Signature`, `RowShows`, `ScrollToOption`, snapshot unchanged; (5) `WindowHelp.lua`, then `krowi:taint-reviewer`; (6) `WindowSearch.lua`; (7) `WindowPage.lua`; (8) `WindowLayout.lua` (after 5-8 the method-name list is unchanged); (9) `lib.Geometry`, the dead heights, the option row's per-type table, checked in game; (10) `lib.Internal` and a test of `lib`'s keys; (11) `CLAUDE.md` rows, rules. New files registered in `Krowi_Options.xml` and the versioning table, each at minor 0 (spec: KAF 105.0 waits). Opus reviews the diff of steps 5-9 and the two-copy mix design. Proof: test addon on Retail and Mists, Krowi's `look` gate in game (a gate row), the two-copy check with only a newer core file. **Gate 2.**
+
+## Phase 3: bugs (PR 3)
+Per bug: flip its scenario from `Recorded` to `Target`, then the fix on the new structure. Order by file: search (`WindowSearch.lua`), page and footer (`WindowPage.lua`: Overview question, stale element data, `SectionId` after an error), rows (`RowMixins.lua`: slider step and min = max, `With` on a non-toggle, undo arrow reload bar, select with a stale value, tab-list row without `Show`), config (`Krowi_Options.lua`: one tab's `OnCreated` error, saved shape of the wrong type), cleanups. Changelog lines. **Gate 3.**
+
+## Phase 4: config contract (PR 4, KAF PR)
+`CheckConfig` required set to five; defaults in `Krowi_Options.lua`'s config handling for the six; unknown-key check naming tab and key; the header comment and `CLAUDE.md`; scenarios for every missing optional field and for a typo; KAF's `window-second-tab` drops its no-ops. **Gate 4.**
+
+## Phase 5: in game (PR 5 for records and fixes)
+`Run-GameTests.ps1` on Retail, Mists, then Forever, Era, Anniversary one at a time (`Start-Game.ps1`, `-EnterWorld`, `-Quit`). **Open risk:** the kit starts Retail, Mists and Forever families; Era and Anniversary may need Krowi to start the client (or a kit step), decided at this gate, not assumed. The needs-the-game items (#16-18, #31); KAF's `options`/`escape` on Retail and Mists; the two-copy gate (`Test-TwoCopies.ps1`, Retail and Classic) with the kit's updated entry. **Gate 5.**
+
+## Phase 6: clients and housekeeping (PR 6)
+TOC `## Interface: 120105, 50504, 20506, 16001, 11509, 38002`; a review against `classic_era` and Forever FrameXML (Forever branches on what the frame does, with `IsModern` from Krowi_Util 2.8 if needed); `CLAUDE.md` (Krowi_Util 2.5 minimum, the #24 rules); kit preflight check for a disappeared registration name (#25, kit PR); the 2.0 changelog grows. **Gate 6, then the PR set is ready for Krowi's merge decision (merge gate); no release.**
+
+## Risks
+- Rows and layout are proven in game only; the method-name list and snapshots cover the rest.
+- Porting ~45 steps onto fixtures can change what they prove; the side-by-side run on Retail and Mists before KAF's copy is deleted is the guard.
+- Four repos change (this one, KAF, kit, addon manager); a paired PR can wait on another's merge. Order in each phase: kit and addon manager first, then the library, then KAF.
+- Era, Anniversary: starting the client; Titan: no install.
+- Releases of KAF 105.0 must wait (spec).
+- Class `library`: the guard refuses `gh pr create` if `Get-ChangeClass.ps1` says higher than `Class` (harness changes in the kit PRs count as `harness`: their PRs are separate and ask all four gates).
+
+## Verification (every phase)
+Lua 5.1 syntax via the plugin hook; `Tests/headless/run.lua`; KAF lint and headless `options`, `escape`; `Find-DeprecatedApi.ps1` (live, classic, classic_era, classic_titan); `krowi:taint-reviewer` where Blizzard frames are touched; `/code-review`; in game `Run-GameTests.ps1`, `Read-GameErrors.ps1`; `Get-ChangeClass.ps1` before each PR; `gates.md` row per answer.

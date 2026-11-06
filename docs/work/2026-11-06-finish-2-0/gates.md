@@ -14,3 +14,4 @@ Class: library
 | 2026-11-06 | design | Whether KAF 105.0 waits for this work (minors stay 0, no stubs) | KAF 105.0 waits | "KAF 105.0 waits for this (Recommended)" | took |
 | 2026-11-06 | design | Internals under lib.Internal in 2.0 | yes | first: "I don't get the question and answers. Plan was to move options test to options and kaf only test the piblic stuff right for it's own addon?"; after the restatement: "Yes, in 2.0 (Recommended)" | took |
 | 2026-11-06 | design | The packaging exclusion list: a per-repo file read by the addon manager and the kit | _Packaging/Exclude.txt | first: "1. But why txt?"; after the restatement: "_Packaging/.pkgmeta" | other |
+| 2026-11-06 | plan | The plan: six phases, phase 1 in detail (exclusion list, harness, test addon, ported steps, paired kit, addon manager and KAF PRs), no full headless fake of the game's frames | approve | approved in plan mode | took |
