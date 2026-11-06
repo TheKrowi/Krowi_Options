@@ -14,7 +14,10 @@
 --   Names         function(element): the texts the search finds the row by (strings; anything else is skipped), as the
 --                 game's search tags a setting (Blizzard_SettingControls.lua); a kind without Names is not searched
 --   Descriptions  function(element): the texts the broad search finds it by too
---   Search        where a row stands for the search (Search.lua): Heading (1 for a heading that also ends the indents and
+--   Options       function(element): the option the row stands for and the one beside it (an option's With), which the
+--                 page's signature and the hovered row's help follow (WindowMixin.lua)
+--   Cells         function(element): the options in a grid row's check boxes
+--   Search       where a row stands for the search (Search.lua): Heading (1 for a heading that also ends the indents and
 --                 the grid above it, 2 for one that does not), Indented (it hangs under its option's parent or the row
 --                 above it with a smaller indent), BringsMembers (found, it brings its member options), Columns (a grid's
 --                 column titles) and UnderColumns (a grid row, which hangs under the titles above it)
@@ -56,6 +59,7 @@ kinds.Option = {
         local withDescription = with and not with:IsHidden() and with.GetDescription and with:GetDescription() or nil
         return option.GetDescription and option:GetDescription(), withDescription
     end,
+    Options = function(element) return element.Option, element.With end,
     Search = { Indented = true },
 }
 
@@ -79,6 +83,7 @@ kinds.GridRow = {
     Build = "GridRow",
     Height = 28,
     Names = function(element) return element.Label end,
+    Cells = function(element) return element.Cells end,
     Search = { UnderColumns = true },
 }
 
@@ -95,6 +100,8 @@ kinds.TabRow = {
         local show = element.Item.Show
         return show and show:GetLabel()
     end,
+    -- Its Show check box's option; a tab without one stands for no option
+    Options = function(element) return element.Item and element.Item.Show end,
 }
 
 -- [[ A link ]] --

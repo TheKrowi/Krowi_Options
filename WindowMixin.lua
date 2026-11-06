@@ -706,13 +706,16 @@ function WindowMixin:ShowSection(id, optionId, keepSearchText)
     if optionId then self:ScrollToOption(optionId) end
 end
 
--- The rows a page shows, to tell after a change whether the same rows stay
+-- The rows a page shows, to tell after a change whether the same rows stay: each row's kind and the option it stands for
+-- with the one beside it while that shows (the kinds' Options, Kinds.lua), or its key or text
 local function Signature(elements)
     local parts = {}
     for i, element in ipairs(elements) do
-        local option = element.Option or (element.Item and element.Item.Show)
-        local with = element.With and not element.With:IsHidden() and ("+" .. (element.With.Id or "")) or "" -- shown with its row
-        parts[i] = element.Kind .. ":" .. (option and ((option.Id or "") .. "|" .. option:GetLabel() .. with) or tostring(element.Key or element.Text or element.Label or ""))
+        local kind = lib.Kinds[element.Kind]
+        local option, with
+        if kind and kind.Options then option, with = kind.Options(element) end
+        local beside = with and not with:IsHidden() and ("+" .. (with.Id or "")) or "" -- shown with its row
+        parts[i] = element.Kind .. ":" .. (option and ((option.Id or "") .. "|" .. option:GetLabel() .. beside) or tostring(element.Key or element.Text or element.Label or ""))
     end
     return table.concat(parts, "\n")
 end
@@ -831,13 +834,15 @@ function WindowMixin:OnOptionChanged(option)
     self:RefreshHover()
 end
 
--- Whether a row still shows an option: as its own or the one after its check box, as a grid's check box or a tab's
+-- Whether a row still shows an option: as its own or the one after its check box as the row drew them, or as the option
+-- its kind holds (Kinds.lua: a tab's Show, a grid row's check boxes)
 local function RowShows(row, option)
     if row.Option == option or row.With == option then return true end
     local element = row.Element
-    if not element then return false end
-    if element.Item and element.Item.Show == option then return true end
-    for _, cell in ipairs(element.Cells or {}) do
+    local kind = element and lib.Kinds[element.Kind]
+    if not kind then return false end
+    if kind.Options and kind.Options(element) == option then return true end
+    for _, cell in ipairs(kind.Cells and kind.Cells(element) or {}) do
         if cell == option then return true end
     end
     return false
