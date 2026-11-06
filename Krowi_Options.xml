@@ -11,5 +11,6 @@
     <Script file="RowMixins.lua"/>
     <Script file="RowFrames.lua"/>
     <Script file="WindowMixin.lua"/>
+    <Script file="WindowHelp.lua"/>
     <Script file="WindowFrame.lua"/>
 </Ui>
