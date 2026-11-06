@@ -100,7 +100,8 @@ function NavHeaderMixin:Init(element)
 end
 
 -- [[ The window ]] --
--- Every file of the window adds its methods to this one table: this core, and its parts (WindowHelp.lua)
+-- Every file of the window adds its methods to this one table: this core, and its parts (WindowHelp.lua,
+-- WindowSearch.lua)
 lib.Mixins.Window = lib.Mixins.Window or {}
 local WindowMixin = lib.Mixins.Window
 
@@ -197,23 +198,8 @@ function WindowMixin:OnLoad()
     navBar:RegisterCallback(ManagedScrollBarVisibilityBehaviorMixin.Event.OnVisibilityChanged, function(_, shown) self:OnNavScrollBarShown(shown) end, self)
     lib.InitList(self, self.PageScrollBox, self.PageScrollBar, lib.Kinds, pageInsets.Pad)
     self:LoadHelp() -- the help pane's list, the lightbox and Show me (WindowHelp.lua)
+    self:LoadSearch() -- the search box and its check boxes (WindowSearch.lua)
 
-    -- The search follows what the player types; the box's clear button and the window's OnHide empty it without user
-    -- input, which ends a search too
-    self.SearchBox:HookScript("OnTextChanged", function(box, userInput) if userInput or self.Searching then self:OnSearch(box:GetText()) end end)
-    self.SearchBox:HookScript("OnHide", function(box) box:SetText("") end)
-    -- Every tab instead of the selected one (unticked by default); kept for every addon like the window's place
-    self.SearchAll:SetScript("OnClick", function(button)
-        self.SearchEveryTab = button:GetChecked() and true or false
-        lib.SetShared("SearchAll", self.SearchEveryTab)
-        if self.Searching then self:OnSearch(self.SearchBox:GetText()) end
-    end)
-    -- Descriptions too (unticked by default: the game's search finds names only); kept like the scope
-    self.SearchBroad:SetScript("OnClick", function(button)
-        self.BroadSearch = button:GetChecked() and true or false
-        lib.SetShared("SearchBroad", self.BroadSearch)
-        if self.Searching then self:OnSearch(self.SearchBox:GetText()) end
-    end)
     self.CollapseButton:SetScript("OnClick", function() self:SetPaneCollapsed(true) end)
     self.ExpandButton:SetScript("OnClick", function() self:SetPaneCollapsed(false) end)
     -- « hides the pane and » brings it back, the way the window's right edge moves; gold, white under the mouse, as the
@@ -832,51 +818,4 @@ end
 function WindowMixin:ResetSection(id)
     if Ask(true, self.Config.ResetSection, id) then self.ReloadPending = true end
     self:ReloadSection()
-end
-
--- [[ Search ]] --
--- The results as the game's Options window shows them (docs/work/2026-11-03-blizzard-search): the selected tab, or with
--- "Search all tabs" ticked every tab under its addon's name; each section's name, which opens it, then its found rows,
--- working as on its page, under the headings they stand under there
-function WindowMixin:SearchElements(text)
-    local everyTab = self.SearchEveryTab and #lib.Tabs > 1
-    local list = {}
-    local broad = self.BroadSearch
-    for _, group in ipairs(lib.Search(text, everyTab, self.Tab, broad)) do
-        local tab = group.Tab
-        if everyTab then list[#list + 1] = { Kind = "Header", Text = tab.Config.TabName } end
-        for _, section in ipairs(group.Sections) do
-            local id = section.Id
-            list[#list + 1] = { Kind = "SearchHeading", Text = section.Name, OnClick = function() self:ShowTab(tab, id) end }
-            local heading = 0
-            for _, row in ipairs(section.Rows) do
-                if row.HeadingAt ~= heading then
-                    heading = row.HeadingAt
-                    if row.Heading ~= "" then list[#list + 1] = { Kind = "SubHeading", Text = row.Heading } end
-                end
-                list[#list + 1] = row
-            end
-        end
-    end
-    if #list == 0 then list[1] = { Kind = "Note", Text = self.Strings.NoResults } end
-    return list
-end
-
--- From the first letter, as the game's; an empty box goes back to the section. scrollPosition: the results found again
--- after a change keep theirs, and a question asked in them stays
-function WindowMixin:OnSearch(text, scrollPosition)
-    text = text and text:gsub("^%s+", ""):gsub("%s+$", "") or ""
-    if text == "" then
-        if self.Searching then self:ShowSection(self.SectionId, nil, true) end
-        return
-    end
-    self.Searching = true
-    if not scrollPosition then self.Confirming = nil end
-    self.PageTitle:SetText(self.Strings.SearchResults)
-    -- As a section's fill (ShowSection): each part on its own, and the fill always ends
-    self.Filling = true
-    Protected(self.RefreshNav, self)
-    Protected(function() self:FillPage(scrollPosition or ScrollBoxConstants.DiscardScrollPosition, self:SearchElements(text)) end)
-    if not scrollPosition then Protected(self.ShowSearchHelp, self) end
-    self:EndFill()
 end
