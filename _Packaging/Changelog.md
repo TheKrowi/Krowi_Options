@@ -9,8 +9,15 @@ All notable changes to this project will be documented in this file.
 - Search descriptions shows on every tab
 - The window's frame is named `Krowi_Options_2_Window` (was `Krowi_OptionsWindow`), also as `lib.WindowName`
 - `CreateWindow` refuses a config with a missing or wrong field, and the error names it
+- The window's place, size, help pane and search ticks are kept in each addon's `saved.Window` with the time of the change, and the window opens from the newest, so the addons agree again after one of them was off for a while
+- The headers of `Krowi_Options.lua` and `RowMixins.lua` describe the whole API: the config, the element kinds, the option interface and what is public
 
 ### Fixed
+- An addon's error in `OnCreated`, `OnSectionShown`, `GetElements`, an option's label or hidden check, or `GetHelp` goes to the error handler and no longer breaks the window, the search or the other addons' tabs
+- A saved place or size of the wrong shape no longer opens a second window
+- A tab-list row without `Show` no longer shows a check box that errors
+- A row reused during a key capture no longer refreshes the option it showed before
+- A standalone install no longer errors when no Krowi addon loads before it
 - The undo arrow no longer stays on a row the mouse left through its part scrolled out of the list
 - The hover help follows a change made under the mouse: Reset to Default comes and goes at once
 - A greyed-out setting shows its help under the mouse

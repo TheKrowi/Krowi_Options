@@ -8,6 +8,8 @@
 -- The window and the rows of its navigation and help pane, built in Lua as Window.xml declared them up to 1.0, for the
 -- reason RowFrames.lua gives (docs/work/2026-11-04-krowi-options-library), with RowFrames.lua's pieces.
 
+-- A standalone install loaded before any Krowi addon has no KROWI_LIBMAN and nothing to serve (Krowi_Options.lua)
+if not KROWI_LIBMAN then return end
 local sub, lib = KROWI_LIBMAN:NewSubmodule("WindowFrame", 0)
 if not sub then return end
 

@@ -61,6 +61,7 @@ local function Fresh()
     geterrorhandler = function() return function(message) handled[#handled + 1] = message end end
     CallErrorHandler = function(...) return geterrorhandler()(...) end -- Blizzard_SharedXMLBase/ErrorUtil.lua
     tinsert, tremove = table.insert, table.remove
+    time = os.time -- the game's; lib.SetShared stamps the shared block with it (2026-11-05-contract-and-errors)
     GetBuildInfo = function() return "12.1.5", "1", "", 120105 end
     WOW_PROJECT_ID, WOW_PROJECT_MAINLINE = 1, 1
     strsplittable = function(separator, text)
@@ -237,7 +238,9 @@ Check("4b", "a tab without a saved table leaves the other tabs' shared state sav
     lib.CreateWindow(Config({ TabName = "A", Saved = saved }))
     lib.CreateWindow(Config({ TabName = "B", Saved = function() return nil end }))
     local ok, message = pcall(lib.SetShared, "Point", { "CENTER" })
-    return ok and saved.Point ~= nil, ok and (saved.Point and "A's table has Point" or "A's table lacks Point") or tostring(message)
+    -- The shared keys live in saved.Window since 2026-11-05-contract-and-errors
+    local point = type(saved.Window) == "table" and saved.Window.Point
+    return ok and point ~= nil, ok and (point and "A's table has Point" or "A's table lacks Point") or tostring(message)
 end)
 
 Check("4c", "a config without GetElements is refused at CreateWindow, naming the field", function()

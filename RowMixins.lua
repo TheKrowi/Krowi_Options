@@ -5,8 +5,18 @@
 
 ---@diagnostic disable: undefined-global
 
--- The rows of the options page. An element (see WindowMixin.lua) picks its row; an option row reads the option's
--- interface:
+-- The rows of the options page. A section's elements (config.GetElements, Krowi_Options.lua), each a table with Kind:
+--   Header, SubHeading, Note  { Text }: a heading, a smaller heading, a line of text
+--   Option     { Option, With }: an option row (the interface below); With only on a toggle
+--   Sub        { Text, Members }: a family heading with All / None, which set its member options
+--   Grid       { Columns, Rows = { { Label, Cells } } }: column titles, then a row of check boxes (options) per line
+--   TabList    { Items = { { Position, Show, Source, MoveUp, MoveDown } } }: a tab's place, its Show option (none: no
+--              check box), where it comes from, and the functions that move it
+--   Link       { Text, Detail, OnClick }: a line that opens something
+--   Cards      { Cards = { { Name, Text, IsNew, OnClick, Picture, Width, Height, TexCoords, Part | Icon } } }: three to a
+--              row (CardMixin below)
+-- A kind the window does not know draws nothing. Each element picks its row (WindowMixin.lua, rowKinds); an option row
+-- reads the option's interface:
 --   every option  Type ("toggle", "range", "select", "execute", "input" or "key"), GetLabel, IsHidden, IsDisabled, Get,
 --                 Set (an execute option's runs it), IsChanged, Reset, GetNeedsReload
 --   per type      range: GetRange (min, max, step), optionally Format(value); select: GetValues ({ { value, text } }),
@@ -21,9 +31,15 @@
 -- explains itself under the mouse; a button is the check box's, whose name says what it does (Krowi,
 -- docs/work/2026-11-02-options-widths).
 -- Every change goes through window:OnOptionChanged, which redraws the rows, their changed lines and the reload bar.
+-- Every text an option or element gives (labels, descriptions, values) is a plain string, never a secret value (12.x).
+-- A key option's Slots[n]:Set(key) runs from the key row: an addon's Set that writes bindings (SetBinding, SaveBindings)
+-- fires UPDATE_BINDINGS from addon code, which runs Blizzard's binding displays tainted for the session (accepted,
+-- Krowi_AchievementFilter #197).
 -- RowFrames.lua builds each row and applies its mixin, kept on lib.Mixins rather than as a global, so the newest copy of
 -- the library decides.
 
+-- A standalone install loaded before any Krowi addon has no KROWI_LIBMAN and nothing to serve (Krowi_Options.lua)
+if not KROWI_LIBMAN then return end
 local sub, lib = KROWI_LIBMAN:NewSubmodule("RowMixins", 0)
 if not sub then return end
 
@@ -215,7 +231,9 @@ local function RefreshRange(row, option, disabled)
 end
 
 function OptionRowMixin:Init(element, window)
-    self:EndKeyCapture() -- a recycled row must not bind the next key to its new option
+    -- A recycled row must not bind the next key to its new option, nor refresh the option it showed before
+    self.Option = nil
+    self:EndKeyCapture()
     self.Element, self.Window, self.Option = element, window, element.Option
     local option = self.Option
     self.With = element.With and not element.With:IsHidden() and element.With or nil
@@ -537,8 +555,10 @@ function TabRowMixin:Init(element, window)
     self:Refresh()
 end
 
+-- A tab without a Show option has no check box: a pooled row's would keep another tab's state and error on a click
 function TabRowMixin:Refresh()
     local option = self.Element.Item.Show
+    self.ShowCheck:SetShown(option ~= nil)
     if option then
         self.ShowCheck:SetChecked(option:Get() and true or false)
         self.ShowCheck:SetEnabled(not option:IsDisabled())
