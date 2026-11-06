@@ -136,72 +136,23 @@ end
 lib.Mixins.Window = lib.Mixins.Window or {}
 local WindowMixin = lib.Mixins.Window
 
--- Each element kind: the builder of its row (lib.Build, RowFrames.lua) and its height
-local rowKinds = {
-    Header = { "HeaderRow", 34 },
-    SubHeading = { "SubHeadingRow", 26 },
-    Note = { "NoteRow" },
-    Option = { "OptionRow", 30 },
-    Sub = { "SubRow", 28 },
-    GridHeader = { "GridHeaderRow", 34 },
-    GridRow = { "GridRow", 28 },
-    TabRow = { "TabRow", 28 },
-    Link = { "LinkRow", 26 },
-    CardRow = { "CardRow" },
-    SearchHeading = { "SearchHeadingRow", 45 },
+-- The page's list draws the element kinds (lib.Kinds, Kinds.lua); the navigation and the help pane draw their own, in the
+-- same shape: the builder of each row (WindowFrame.lua) and its height. All three are pooled by lib.InitList (Kinds.lua).
+local navKinds = {
+    NavHeader = { Build = "NavHeader", Height = 30 },
+    NavButton = { Build = "NavButton", Height = 20 },
+    NavSpacer = { Build = "NavSpacer", Height = 18 },
 }
-
--- The rows are built in Lua, without a template, and a list pools the frames it hands out by frame type alone, so a
--- header's frame could come back for an option row (Blizzard_SharedXMLBase FrameFactory.lua). So the list hands out a
--- plain frame, and the row of the element's kind hangs on it as frame.Row, from a pool per kind; when the list lets the
--- frame go, its row goes back (docs/work/2026-11-04-krowi-options-library). Code that walks a list's frames reads
--- frame.Row. leftPad and spacing as the game's category list uses them (Blizzard_CategoryList.lua): its scroll box
+-- The navigation's leftPad and spacing as the game's category list uses them (Blizzard_CategoryList.lua): its scroll box
 -- reaches 50 px left of the list, so a NEW label hanging left of a section is not clipped, and the rows move back by as
 -- much.
-local function InitList(window, scrollBox, scrollBar, kinds, extent, leftPad, spacing)
-    local free = {} -- per kind, the rows not hung on a frame
-    local function Release(host)
-        local row = host.Row
-        if not row then return end
-        row:Hide()
-        row:ClearAllPoints()
-        free[row.ListKind] = free[row.ListKind] or {}
-        tinsert(free[row.ListKind], row)
-        host.Row = nil
-    end
-    local view = CreateScrollBoxListLinearView(0, 0, leftPad or 0, 0, spacing or 0)
-    view:SetElementFactory(function(factory, element)
-        local kind = element.Kind
-        factory("Frame", function(host, data)
-            if host.Row and host.Row.ListKind ~= kind then Release(host) end
-            local row = host.Row
-            if not row then
-                row = free[kind] and tremove(free[kind])
-                if not row then
-                    row = lib.Build[kinds[kind][1]](host)
-                    row.ListKind = kind
-                end
-                row:SetParent(host)
-                row:SetAllPoints(host)
-                row:Show()
-                host.Row = row
-            end
-            if row.Init then row:Init(data, window) end
-        end)
-    end)
-    -- A resetter replaces the pool's own, which hides the frame and clears its anchors
-    view:SetFrameFactoryResetter(function(_, host)
-        Release(host)
-        host:Hide()
-        host:ClearAllPoints()
-    end)
-    view:SetElementExtentCalculator(function(_, element) return extent(element) end)
-    ScrollUtil.InitScrollBoxListWithScrollBar(scrollBox, scrollBar, view)
-    return ScrollUtil.AddManagedScrollBarVisibilityBehavior(scrollBox, scrollBar)
-end
-
-local navExtents = { NavHeader = 30, NavButton = 20, NavSpacer = 18 }
 local navLeftPad = 50
+local helpKinds = {
+    HelpText = { Build = "HelpText", Height = function(window, element)
+        return window:MeasureText(element.Text, element.Font, helpWidth - 52) + (element.Gap or 6)
+    end },
+    HelpPicture = { Build = "HelpPicture", Height = function(_, element) return element.DrawHeight + 10 end },
+}
 
 -- [[ The inner frame ]] --
 -- The game's own inner frame (Options_InnerFrame, 886 x 618 and the same on every client), which
@@ -278,25 +229,11 @@ function WindowMixin:OnLoad()
     self.Measure:Hide()
     self.Measure:SetJustifyH("LEFT")
 
-    local navBar = InitList(self, self.NavScrollBox, self.NavScrollBar, {
-        NavHeader = { "NavHeader" },
-        NavButton = { "NavButton" },
-        NavSpacer = { "NavSpacer" },
-    }, function(element) return navExtents[element.Kind] end, navLeftPad, 2)
+    local navBar = lib.InitList(self, self.NavScrollBox, self.NavScrollBar, navKinds, navLeftPad, 2)
     self.NavScrollShown = self.NavScrollBar:IsShown()
     navBar:RegisterCallback(ManagedScrollBarVisibilityBehaviorMixin.Event.OnVisibilityChanged, function(_, shown) self:OnNavScrollBarShown(shown) end, self)
-    InitList(self, self.PageScrollBox, self.PageScrollBar, rowKinds, function(element)
-        if element.Kind == "Note" then return self:MeasureText(element.Text, "GameFontDisable", self:PageWidth() - 32) + 8 end
-        if element.Kind == "CardRow" then return lib.CardRowHeight(self, element) end
-        return rowKinds[element.Kind][2]
-    end, pageInsets.Pad)
-    self.HelpBar = InitList(self, self.HelpScrollBox, self.HelpScrollBar, {
-        HelpText = { "HelpText" },
-        HelpPicture = { "HelpPicture" },
-    }, function(element)
-        if element.Kind == "HelpPicture" then return element.DrawHeight + 10 end
-        return self:MeasureText(element.Text, element.Font, helpWidth - 52) + (element.Gap or 6)
-    end)
+    lib.InitList(self, self.PageScrollBox, self.PageScrollBar, lib.Kinds, pageInsets.Pad)
+    self.HelpBar = lib.InitList(self, self.HelpScrollBox, self.HelpScrollBar, helpKinds)
     -- The help is filled while the pane is collapsed too, and its scroll bar would then show on the strip
     self.HelpBar:RegisterCallback(ManagedScrollBarVisibilityBehaviorMixin.Event.OnVisibilityChanged, function(_, shown)
         if shown and self.PaneCollapsed then self.HelpScrollBar:Hide() end
@@ -742,9 +679,10 @@ function WindowMixin:RefreshNav()
     self.NavScrollBox:SetDataProvider(CreateDataProvider(list), ScrollBoxConstants.RetainScrollPosition)
 end
 
--- A section's rows as drawn (Search.lua): grids, tab lists and cards as several rows, hidden options left out
+-- A section's rows as drawn (Search.lua): grids, tab lists and cards as several rows, hidden options left out, and only
+-- the kinds the page draws (lib.Kinds, Kinds.lua)
 local function Flatten(elements)
-    return lib.Flatten(elements, rowKinds)
+    return lib.Flatten(elements, lib.Kinds)
 end
 
 -- keepSearchText: a search ended by emptying the box keeps the spaces left in it

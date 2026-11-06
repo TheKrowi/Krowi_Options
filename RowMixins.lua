@@ -15,8 +15,8 @@
 --   Link       { Text, Detail, OnClick }: a line that opens something
 --   Cards      { Cards = { { Name, Text, IsNew, OnClick, Picture, Width, Height, TexCoords, Part | Icon } } }: three to a
 --              row (CardMixin below)
--- A kind the window does not know draws nothing. Each element picks its row (WindowMixin.lua, rowKinds); an option row
--- reads the option's interface:
+-- A kind the window does not know draws nothing. Each element picks its row (Kinds.lua, lib.Kinds); an option row reads
+-- the option's interface:
 --   every option  Type ("toggle", "range", "select", "execute", "input" or "key"), GetLabel, IsHidden, IsDisabled, Get,
 --                 Set (an execute option's runs it), IsChanged, Reset, GetNeedsReload
 --   per type      range: GetRange (min, max, step), optionally Format(value); select: GetValues ({ { value, text } }),
