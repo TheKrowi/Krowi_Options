@@ -46,9 +46,11 @@ end
 
 -- [[ Navigation ]] --
 -- The game's category list (Blizzard_CategoryList.lua): a group under a header bar, a section gold, the selected one
--- white on the active bar, the hovered one on the hover bar
-local NavButtonMixin = {}
-lib.Mixins.NavButton = NavButtonMixin
+-- white on the active bar, the hovered one on the hover bar. Each mixin table on lib.Mixins is added to, never replaced:
+-- a newer copy of a file loaded second would otherwise empty a table an older copy filled, and with the window's code
+-- split over several files an unchanged file at an equal minor never runs again to fill it.
+lib.Mixins.NavButton = lib.Mixins.NavButton or {}
+local NavButtonMixin = lib.Mixins.NavButton
 
 function NavButtonMixin:Init(element, window)
     self.Element, self.Window = element, window
@@ -89,8 +91,8 @@ function NavButtonMixin:OnClick()
     self.Window:ShowSection(self.Element.Id)
 end
 
-local NavHeaderMixin = {}
-lib.Mixins.NavHeader = NavHeaderMixin
+lib.Mixins.NavHeader = lib.Mixins.NavHeader or {}
+local NavHeaderMixin = lib.Mixins.NavHeader
 
 function NavHeaderMixin:Init(element)
     self.Label:SetText(element.Text)
@@ -98,8 +100,8 @@ function NavHeaderMixin:Init(element)
 end
 
 -- [[ Help pane blocks ]] --
-local HelpTextMixin = {}
-lib.Mixins.HelpText = HelpTextMixin
+lib.Mixins.HelpText = lib.Mixins.HelpText or {}
+local HelpTextMixin = lib.Mixins.HelpText
 
 function HelpTextMixin:Init(element)
     self.Text:SetFontObject(element.Font)
@@ -107,8 +109,8 @@ function HelpTextMixin:Init(element)
 end
 
 -- A picture enlarges on click (the window's lightbox); the magnifier cursor says so
-local HelpPictureMixin = {}
-lib.Mixins.HelpPicture = HelpPictureMixin
+lib.Mixins.HelpPicture = lib.Mixins.HelpPicture or {}
+local HelpPictureMixin = lib.Mixins.HelpPicture
 
 function HelpPictureMixin:Init(element, window)
     self.Element, self.Window = element, window
@@ -130,8 +132,9 @@ function HelpPictureMixin:OnLeave()
 end
 
 -- [[ The window ]] --
-local WindowMixin = {}
-lib.Mixins.Window = WindowMixin
+-- Every file of the window adds its methods to this one table
+lib.Mixins.Window = lib.Mixins.Window or {}
+local WindowMixin = lib.Mixins.Window
 
 -- Each element kind: the builder of its row (lib.Build, RowFrames.lua) and its height
 local rowKinds = {

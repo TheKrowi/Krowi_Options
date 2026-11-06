@@ -91,8 +91,10 @@ local controlOfType = { toggle = "Toggle", range = "Range", select = "Select", e
 -- The game's key binding button (KeyBindingFrameBindingButtonTemplate on UIMenuButtonStretchTemplate, the same on every
 -- client): silver art that presses down under the mouse. RowFrames.lua copies its art with pieces that carry no names;
 -- the template's $parent names would make a global per piece for every row.
-local KeyButtonMixin = {}
-lib.Mixins.KeyButton = KeyButtonMixin
+-- Each mixin table on lib.Mixins is added to, never replaced: a newer copy of this file loaded second would otherwise
+-- empty a table an older copy filled (WindowMixin.lua, the same for the window's).
+lib.Mixins.KeyButton = lib.Mixins.KeyButton or {}
+local KeyButtonMixin = lib.Mixins.KeyButton
 
 local keyButtonPieces = { "TopLeft", "TopRight", "BottomLeft", "BottomRight", "TopMiddle", "MiddleLeft", "MiddleRight", "BottomMiddle", "MiddleMiddle" }
 
@@ -112,16 +114,16 @@ function KeyButtonMixin:Lift()
 end
 
 -- [[ Header, sub-heading, note ]] --
-local TextRowMixin = {}
-lib.Mixins.TextRow = TextRowMixin
+lib.Mixins.TextRow = lib.Mixins.TextRow or {}
+local TextRowMixin = lib.Mixins.TextRow
 
 function TextRowMixin:Init(element)
     self.Text:SetText(element.Text or "")
 end
 
 -- [[ An option ]] --
-local OptionRowMixin = {}
-lib.Mixins.OptionRow = OptionRowMixin
+lib.Mixins.OptionRow = lib.Mixins.OptionRow or {}
+local OptionRowMixin = lib.Mixins.OptionRow
 
 -- A control under the mouse fires its OnEnter while greyed out too, as the game's own settings check box does
 -- (SettingsCheckboxTemplate's motionScriptsWhileDisabled, Blizzard_SettingControls.xml), so the help still says what a
@@ -419,8 +421,8 @@ function OptionRowMixin:OnLeave()
 end
 
 -- [[ A family heading or a group's All / None ]] --
-local SubRowMixin = {}
-lib.Mixins.SubRow = SubRowMixin
+lib.Mixins.SubRow = lib.Mixins.SubRow or {}
+local SubRowMixin = lib.Mixins.SubRow
 
 function SubRowMixin:OnLoad()
     local function SetAll(value)
@@ -449,8 +451,8 @@ end
 -- [[ A grid: column titles, then a row of check boxes per line ]] --
 local gridLeft, gridColumn, gridColumns = 200, 72, 5
 
-local GridHeaderRowMixin = {}
-lib.Mixins.GridHeaderRow = GridHeaderRowMixin
+lib.Mixins.GridHeaderRow = lib.Mixins.GridHeaderRow or {}
+local GridHeaderRowMixin = lib.Mixins.GridHeaderRow
 
 function GridHeaderRowMixin:OnLoad()
     self.Columns = {}
@@ -469,8 +471,8 @@ function GridHeaderRowMixin:Init(element)
     end
 end
 
-local GridRowMixin = {}
-lib.Mixins.GridRow = GridRowMixin
+lib.Mixins.GridRow = lib.Mixins.GridRow or {}
+local GridRowMixin = lib.Mixins.GridRow
 
 function GridRowMixin:OnLoad()
     self.Cells = {}
@@ -519,8 +521,8 @@ end
 
 -- [[ The tab list: a tab's position, whether it shows, and arrows to move it ]] --
 -- The check box is ShowCheck, not Show: a child key named Show replaces the row's own Show method.
-local TabRowMixin = {}
-lib.Mixins.TabRow = TabRowMixin
+lib.Mixins.TabRow = lib.Mixins.TabRow or {}
+local TabRowMixin = lib.Mixins.TabRow
 
 function TabRowMixin:OnLoad()
     self.ShowCheck:SetScript("OnClick", function()
@@ -576,8 +578,8 @@ function TabRowMixin:OnLeave()
 end
 
 -- [[ A section's name in the search results, as the game's (SettingsListSearchCategoryMixin): a click opens it ]] --
-local SearchHeadingRowMixin = {}
-lib.Mixins.SearchHeadingRow = SearchHeadingRowMixin
+lib.Mixins.SearchHeadingRow = lib.Mixins.SearchHeadingRow or {}
+local SearchHeadingRowMixin = lib.Mixins.SearchHeadingRow
 
 function SearchHeadingRowMixin:Init(element)
     self.Element = element
@@ -597,8 +599,8 @@ function SearchHeadingRowMixin:OnLeave()
 end
 
 -- [[ A link: a New section, an overview entry ]] --
-local LinkRowMixin = {}
-lib.Mixins.LinkRow = LinkRowMixin
+lib.Mixins.LinkRow = lib.Mixins.LinkRow or {}
+local LinkRowMixin = lib.Mixins.LinkRow
 
 function LinkRowMixin:Init(element)
     self.Element = element
@@ -649,8 +651,8 @@ function lib.CardRowHeight(window, element)
     return 2 * cardBorder + pictureHeight + nameTop + nameHeight + (lineHeight > 0 and lineGap + lineHeight or 0) + cardBottom + cardGap
 end
 
-local CardRowMixin = {}
-lib.Mixins.CardRow = CardRowMixin
+lib.Mixins.CardRow = lib.Mixins.CardRow or {}
+local CardRowMixin = lib.Mixins.CardRow
 
 function CardRowMixin:OnLoad()
     self.Cards = {}
@@ -674,8 +676,8 @@ function CardRowMixin:Init(element, window)
     end
 end
 
-local CardMixin = {}
-lib.Mixins.Card = CardMixin
+lib.Mixins.Card = lib.Mixins.Card or {}
+local CardMixin = lib.Mixins.Card
 
 function CardMixin:Init(card, width)
     self.Card = card
