@@ -30,7 +30,7 @@ local function Ask(fallback, func, ...)
     return fallback
 end
 
--- The pane's width, as the window lays it out (helpWidth in WindowMixin.lua)
+-- The pane's width, as the window lays it out (helpWidth in WindowLayout.lua)
 local helpWidth = 380
 
 -- [[ Help pane blocks ]] --

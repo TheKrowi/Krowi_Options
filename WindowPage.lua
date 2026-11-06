@@ -6,10 +6,10 @@
 ---@diagnostic disable: undefined-global
 
 -- The window's navigation and page (WindowMixin.lua is the window's core): the open tab's sections in the navigation;
--- the open section's rows on the page, refreshed or rebuilt after a change; the page's header with the section's changed
--- count, Defaults and the reload bar; and the question the window asks there (Defaults, an option's Confirm). Its state
--- on the window: SectionId, Elements, Signature, ReloadPending and Confirming. WindowFrame.lua builds the navigation's
--- rows, RowFrames.lua the page's.
+-- the open section's rows on the page, refreshed or rebuilt after a change; the page's header with the section's
+-- changed count, Defaults and the reload bar; and the question the window asks there (Defaults, an option's Confirm).
+-- Its state on the window: SectionId, Elements, Signature, ReloadPending and Confirming. WindowFrame.lua builds the
+-- navigation's rows, RowFrames.lua the page's.
 
 -- A standalone install loaded before any Krowi addon has no KROWI_LIBMAN and nothing to serve (Krowi_Options.lua)
 if not KROWI_LIBMAN then return end

@@ -145,12 +145,12 @@ Init, OnEnter, OnLeave, OnLoad, Refresh]],
 Init]],
     Window = [[
 ApplyStrings, ApplyWidth, AskConfirm, CancelConfirm, ConfirmingHere, CreateInnerFrame, EndFill, EndKeyCaptures,
-FillHelp, FillPage, HideTooltip, InCombat, Init, Layout, LayoutInnerFrame, LoadHelp, LoadPage, LoadSearch,
-MeasureText, NavEnd, OnDefaultsClick, OnDragStart, OnDragStop, OnEvent, OnHide, OnLoad, OnNavScrollBarShown,
-OnOptionChanged, OnRowEnter, OnRowLeave, OnSearch, OnShow, OnSizeChanged, Open, PageWidth, Refresh, RefreshFooter,
-RefreshHover, RefreshNav, RefreshTabs, ReleaseShowMe, ReloadSection, ResetSection, SavePoint, ScrollToOption,
-SearchElements, SetKicker, SetPaneCollapsed, ShowPicture, ShowSearchHelp, ShowSection, ShowSectionHelp, ShowTab,
-UpdateSearchAll, UpdateShowMe]],
+FillHelp, FillPage, HideTooltip, InCombat, Init, Layout, LayoutInnerFrame, LoadHelp, LoadLayout, LoadPage,
+LoadSearch, MeasureText, NavEnd, OnDefaultsClick, OnDragStart, OnDragStop, OnEvent, OnHide, OnLoad,
+OnNavScrollBarShown, OnOptionChanged, OnRowEnter, OnRowLeave, OnSearch, OnShow, OnSizeChanged, Open, PageWidth,
+Refresh, RefreshFooter, RefreshHover, RefreshNav, RefreshTabs, ReleaseShowMe, ReloadSection, ResetSection, SavePoint,
+ScrollToOption, SearchElements, SetKicker, SetPaneCollapsed, ShowPicture, ShowSearchHelp, ShowSection,
+ShowSectionHelp, ShowTab, UpdateSearchAll, UpdateShowMe]],
 }
 
 local builders = [[

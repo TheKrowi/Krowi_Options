@@ -5,9 +5,9 @@
 
 ---@diagnostic disable: undefined-global
 
--- The window's search (WindowMixin.lua is the window's core): what lib.Search (Search.lua) finds, as the page's rows; the
--- search box, which starts and ends a search; and the check boxes for its scope and breadth. Its state on the window:
--- Searching, SearchEveryTab and BroadSearch.
+-- The window's search (WindowMixin.lua is the window's core): what lib.Search (Search.lua) finds, as the page's rows;
+-- the search box, which starts and ends a search; and the check boxes for its scope and breadth. Its state on the
+-- window: Searching, SearchEveryTab and BroadSearch.
 
 -- A standalone install loaded before any Krowi addon has no KROWI_LIBMAN and nothing to serve (Krowi_Options.lua)
 if not KROWI_LIBMAN then return end

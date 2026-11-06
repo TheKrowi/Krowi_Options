@@ -14,5 +14,6 @@
     <Script file="WindowHelp.lua"/>
     <Script file="WindowSearch.lua"/>
     <Script file="WindowPage.lua"/>
+    <Script file="WindowLayout.lua"/>
     <Script file="WindowFrame.lua"/>
 </Ui>
