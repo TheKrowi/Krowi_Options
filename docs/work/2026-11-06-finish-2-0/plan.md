@@ -54,3 +54,17 @@ TOC `## Interface: 120105, 50504, 20506, 16001, 11509, 38002`; a review against 
 
 ## Verification (every phase)
 Lua 5.1 syntax via the plugin hook; `Tests/headless/run.lua`; KAF lint and headless `options`, `escape`; `Find-DeprecatedApi.ps1` (live, classic, classic_era, classic_titan); `krowi:taint-reviewer` where Blizzard frames are touched; `/code-review`; in game `Run-GameTests.ps1`, `Read-GameErrors.ps1`; `Get-ChangeClass.ps1` before each PR; `gates.md` row per answer.
+
+## Where phase 1 departed from the plan (2026-11-06)
+- **The headless harness** was built from the later repro's helpers plus `Replace`, `NIL` and `LoadCopy(minors, edits)` of the earlier one. Both `repro.lua` files moved in as suites with their 39 checks unchanged (the originals stay in their work folders as history).
+- **The bug scenarios** (`Bugs.lua`, B1 to B16: 30 scenarios, 27 open) were written by an Opus agent on the real code. Each Recorded is the output of a run. A scratch script applied plausible fixes in memory and every open Target flipped except B15b (the scratch fix covered one path only). Judgement calls to confirm at the phase 3 gate: B14b/c (what `SectionId` is after a `GetElements` error), and B3, B9, B12, whose Targets accept any reasonable fix.
+- **New defects the scenarios' author found, not fixed:** every refresh of a select row calls `GenerateMenu()` (two closures per choice, more than B8); the signature also ignores cards' `Text`/`IsNew` and grid rows' `Cells` (wider than B4); an input's `OnEscapePressed` passes `Get()` to `SetText` unchecked (like B11b); `Plain` in `Search.lua` leaves `|H..|h` and `|K..|k` codes; a tab-list item without `Show` draws "?" as its name. They go into phase 3's list when Krowi agrees.
+- **The test addon** (38 live steps, 14 frame-free scenarios) was built by an Opus agent from KAF's steps and run in game by me. First run, Retail: 58 passed, 2 failed, because the game's KAF install still held a library copy from before the contract fix (KAF loads first, equal minors, so its copy was the one under test); after deploying KAF's `main`: **Retail 60/0, Mists 60/0**, then a Mists smoke 24/0, BugGrabber clean.
+- **TOC fix:** on Mists the first run wrote no saved variables and the client reported no metadata for the addon, because its TOC opened with a comment block; Retail reads it. The metadata comes first now (checked in game).
+- **Item 9's kit part moved to phase 5.** `options smoke` and `escape` still exist in KAF (smoke is `open` and `close`), so the kit's two-copy entry keeps working unchanged. Running the test addon's own smoke inside the gate's mixes is part of phase 5's two-copy run, in its own kit pull request.
+- **Added:** the `.pkgmeta` reader of the kit (#15) and the addon manager (#1) reads an embedded repo's own list too (the library under `Libs`), merged 2026-11-06. KAF's pull request (#399) carries a backlog item for the library's tests on a new game build.
+
+## Results of phase 1 (2026-11-06)
+- Headless `Tests\headless\run.lua`: 83 passed, of which 27 are open defects (Recorded differs from Target), 0 failed.
+- In game, Krowi_OptionsTests: Retail 60 passed, 0 failed; Mists 60 passed, 0 failed (all), smoke 24/0; BugGrabber clean. Beside it, KAF's own suite before its cut: 96 passed on both clients.
+- Krowi_AchievementFilter #399 (the cut, `harness`): Retail `options` 30/0/1 skipped and `escape` 34/34, Mists `options` 30/0/1, lint 0 errors.
