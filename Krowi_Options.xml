@@ -13,5 +13,6 @@
     <Script file="WindowMixin.lua"/>
     <Script file="WindowHelp.lua"/>
     <Script file="WindowSearch.lua"/>
+    <Script file="WindowPage.lua"/>
     <Script file="WindowFrame.lua"/>
 </Ui>
