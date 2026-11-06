@@ -13,7 +13,7 @@
 local folder = ((arg and arg[0]) or ""):gsub("\\", "/"):match("^(.-)run%.lua$") or ""
 local h = assert(loadfile(folder .. "harness.lua"))()
 
-local suites = { "ReviewFixes", "ContractAndErrors", "Bugs" }
+local suites = { "ReviewFixes", "ContractAndErrors", "Bugs", "TestAddon" }
 
 for _, name in ipairs(suites) do
     h.BeginSuite(name)
