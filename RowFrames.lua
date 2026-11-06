@@ -56,11 +56,11 @@ local function Finish(frame, mixin, scripts)
 end
 build.Finish = Finish
 
--- A list row, hidden until the list hangs it on its frame
-local function Row(frameType, parent, height)
+-- A list row, hidden until the list hangs it on its frame. It has no height of its own: the list sets it to all of its
+-- frame (lib.InitList, Kinds.lua) before it is shown, and sizes that frame by the element's kind.
+local function Row(frameType, parent)
     local row = CreateFrame(frameType, nil, parent)
     row:Hide()
-    if height then row:SetHeight(height) end
     return row
 end
 build.Row = Row
@@ -177,7 +177,7 @@ end
 -- [[ Header, sub-heading, note ]] --
 
 function build.HeaderRow(parent)
-    local row = Row("Frame", parent, 34)
+    local row = Row("Frame", parent)
     row.Text = Text(row, "ARTWORK", "GameFontHighlightLarge", "LEFT")
     row.Text:SetPoint("BOTTOMLEFT", 6, 6)
     row.Text:SetPoint("RIGHT", -6, 0)
@@ -185,7 +185,7 @@ function build.HeaderRow(parent)
 end
 
 function build.SubHeadingRow(parent)
-    local row = Row("Frame", parent, 24)
+    local row = Row("Frame", parent)
     row.Text = Text(row, "ARTWORK", "GameFontHighlight", "LEFT")
     row.Text:SetPoint("LEFT", 16, 0)
     row.Text:SetPoint("RIGHT", -16, 0)
@@ -193,7 +193,7 @@ function build.SubHeadingRow(parent)
 end
 
 function build.NoteRow(parent)
-    local row = Row("Frame", parent, 24)
+    local row = Row("Frame", parent)
     row.Text = Text(row, "ARTWORK", "GameFontDisable", "LEFT", "TOP")
     row.Text:SetPoint("TOPLEFT", 16, -4)
     row.Text:SetPoint("BOTTOMRIGHT", -16, 0)
@@ -211,7 +211,7 @@ end
 -- [[ An option ]] --
 
 function build.OptionRow(parent)
-    local row = Row("Frame", parent, 30)
+    local row = Row("Frame", parent)
     row:EnableMouse(true)
     row.Hover = Hover(row)
     row.Label = Text(row, "ARTWORK", "GameFontNormal", "LEFT")
@@ -244,7 +244,7 @@ function build.OptionRow(parent)
     row.Toggle = build.CheckButton(row)
     row.Toggle:Hide()
     row.Range = CreateFrame("Frame", nil, row, "MinimalSliderWithSteppersTemplate")
-    row.Range:SetSize(250, 20)
+    row.Range:SetSize(lib.Geometry.SliderWidth, 20)
     row.Range:Hide()
     row.Select = build.Select(row)
     row.Select:Hide()
@@ -267,7 +267,7 @@ end
 -- [[ A family heading or a group's All / None ]] --
 
 function build.SubRow(parent)
-    local row = Row("Frame", parent, 28)
+    local row = Row("Frame", parent)
     row.Text = Text(row, "ARTWORK", "GameFontHighlight", "LEFT")
     row.Text:SetPoint("LEFT", 16, 0)
     row.All = CreateFrame("Button", nil, row, "UIPanelButtonNoTooltipTemplate")
@@ -281,12 +281,12 @@ end
 -- [[ A grid ]] --
 
 function build.GridHeaderRow(parent)
-    local row = Row("Frame", parent, 34)
+    local row = Row("Frame", parent)
     return Finish(row, lib.Mixins.GridHeaderRow, { OnLoad = "OnLoad" })
 end
 
 function build.GridRow(parent)
-    local row = Row("Frame", parent, 28)
+    local row = Row("Frame", parent)
     row:EnableMouse(true)
     row.Hover = Hover(row)
     row.Label = Text(row, "ARTWORK", "GameFontNormal", "LEFT")
@@ -308,7 +308,7 @@ local function ArrowButton(parent, direction)
 end
 
 function build.TabRow(parent)
-    local row = Row("Frame", parent, 28)
+    local row = Row("Frame", parent)
     row:EnableMouse(true)
     row.Hover = Hover(row)
     row.Position = Text(row, "ARTWORK", "GameFontDisable", "RIGHT")
@@ -320,7 +320,7 @@ function build.TabRow(parent)
     row.Source = Text(row, "ARTWORK", "GameFontDisableSmall", "LEFT")
     row.Source:SetPoint("LEFT", row.Label, "RIGHT", 8, 0)
     row.ShowCheck = build.CheckButton(row)
-    row.ShowCheck:SetPoint("LEFT", 34, 0)
+    row.ShowCheck:SetPoint("LEFT", lib.Geometry.TabCheckX, 0)
     row.Up = ArrowButton(row, "Up")
     row.Down = ArrowButton(row, "Down")
     row.Down:SetPoint("LEFT", row.Up, "RIGHT", 4, 0)
@@ -332,7 +332,7 @@ end
 -- A section's name above its rows, as the game's SettingsListSearchCategoryTemplate (Blizzard_SettingsList.xml, the same on
 -- every client) draws it; never inherited, see docs/backlog.md
 function build.SearchHeadingRow(parent)
-    local row = Row("Button", parent, 45)
+    local row = Row("Button", parent)
     row.MouseoverOverlay = Color(row, "BACKGROUND", 0.1, 0.1, 0.1, 1)
     row.MouseoverOverlay:SetBlendMode("ADD")
     row.MouseoverOverlay:SetAllPoints()
@@ -343,7 +343,7 @@ function build.SearchHeadingRow(parent)
 end
 
 function build.LinkRow(parent)
-    local row = Row("Button", parent, 26)
+    local row = Row("Button", parent)
     row.Text = Text(row, "ARTWORK", "GameFontNormal", "LEFT")
     row.Text:SetWordWrap(false)
     row.Text:SetPoint("LEFT", 16, 0)
@@ -372,11 +372,12 @@ local cardEdges = { -- size (width or height), two anchors (point, x, y)
 }
 
 function build.Card(parent)
+    local geometry = lib.Geometry
     local card = CreateFrame("Button", nil, parent)
     card.Fill = Color(card, "BACKGROUND", 0, 0, 0, 0.35)
     card.Fill:SetAllPoints()
     card.PictureArea = Color(card, "BORDER", 0, 0, 0, 0.5)
-    card.PictureArea:SetHeight(86)
+    card.PictureArea:SetHeight(geometry.CardPictureHeight)
     card.PictureArea:SetPoint("TOPLEFT", 1, -1)
     card.PictureArea:SetPoint("TOPRIGHT", -1, -1)
     card.Hover = Hover(card, "BORDER", 1)
@@ -391,13 +392,13 @@ function build.Card(parent)
     card.Name:SetWordWrap(false)
     card.Line = Text(card, "ARTWORK", "GameFontDisableSmall", "LEFT", "TOP")
     card.Line:SetPoint("TOPLEFT", card.Name, "BOTTOMLEFT", 0, -3)
-    card.PictureLine = Color(card, "OVERLAY", 1, 1, 1, 0.12)
+    card.PictureLine = Color(card, "OVERLAY", unpack(geometry.CardBorderColor))
     card.PictureLine:SetHeight(1)
     card.PictureLine:SetPoint("TOPLEFT", card.PictureArea, "BOTTOMLEFT")
     card.PictureLine:SetPoint("TOPRIGHT", card.PictureArea, "BOTTOMRIGHT")
     card.Edges = {}
     for _, spec in ipairs(cardEdges) do
-        local edge = Color(card, "OVERLAY", 1, 1, 1, 0.12)
+        local edge = Color(card, "OVERLAY", unpack(geometry.CardBorderColor))
         if spec[1] then edge:SetWidth(spec[1]) else edge:SetHeight(spec[2]) end
         edge:SetPoint(spec[3], spec[4], spec[5])
         edge:SetPoint(spec[6], spec[7], spec[8])

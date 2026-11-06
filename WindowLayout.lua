@@ -15,11 +15,12 @@ if not KROWI_LIBMAN then return end
 local sub, lib = KROWI_LIBMAN:NewSubmodule("WindowLayout", 0)
 if not sub then return end
 
--- The navigation is as wide as the game's category list, so its header bars (199 px) end at the divider
-local navWidth, helpWidth, stripWidth = 199, 380, 30
+-- The navigation is as wide as the game's category list, so its header bars (199 px) end at the divider; the help pane
+-- is lib.Geometry.HelpWidth wide (Kinds.lua), and collapsed it leaves a strip
+local navWidth, stripWidth = 199, 30
 -- The game's Options window is 920 wide (Blizzard_SettingsPanel.xml); ours adds the help pane, or its strip, to the right
--- of that and resizes in height only (docs/work/2026-11-02-options-widths)
-local gameWidth, minHeight = 920, 560
+-- of that and resizes in height only, down to lib.Geometry.MinHeight (docs/work/2026-11-02-options-widths)
+local gameWidth = 920
 local dividerWidth = 630 -- Options_HorizontalDivider at its own size, measured with the kit's Get-Atlas.ps1
 -- The page as the game's settings list lays it out (Blizzard_SettingsPanel.xml, Blizzard_SettingsList.lua): its
 -- container from 16 after the navigation to 22 before the window's edge, here 4 before the help pane, and the list in it
@@ -27,7 +28,7 @@ local dividerWidth = 630 -- Options_HorizontalDivider at its own size, measured 
 local pageInsets = { Left = 16 - 15, Right = 4 + 20, Pad = 25 }
 
 function lib.WindowWidth(collapsed)
-    return gameWidth + (collapsed and stripWidth or helpWidth)
+    return gameWidth + (collapsed and stripWidth or lib.Geometry.HelpWidth)
 end
 
 -- [[ The window ]] --
@@ -154,6 +155,7 @@ end
 -- fit, and one taller than it (a height saved on a larger screen) comes back inside it. keepLeft: the window grows and
 -- shrinks to the right, its top left staying where it is, and that place is saved.
 function WindowMixin:ApplyWidth(keepLeft)
+    local minHeight = lib.Geometry.MinHeight
     local width = lib.WindowWidth(self.PaneCollapsed)
     local screen = UIParent:GetWidth()
     local scale = screen > 0 and math.min(1, (screen - 40) / width) or 1
@@ -222,13 +224,13 @@ end
 
 -- A row's width: the page's scroll box (pageInsets) without its rows' left padding
 function WindowMixin:PageWidth()
-    return self:GetWidth() - (bodyInsets.Left - bodyInsets.Right) - self:NavEnd() - (self.PaneCollapsed and stripWidth or helpWidth)
-        - pageInsets.Left - pageInsets.Right - pageInsets.Pad
+    return self:GetWidth() - (bodyInsets.Left - bodyInsets.Right) - self:NavEnd()
+        - (self.PaneCollapsed and stripWidth or lib.Geometry.HelpWidth) - pageInsets.Left - pageInsets.Right - pageInsets.Pad
 end
 
 function WindowMixin:Layout()
     local body = self.Body
-    local right = self.PaneCollapsed and stripWidth or helpWidth
+    local right = self.PaneCollapsed and stripWidth or lib.Geometry.HelpWidth
     local navEnd = self:NavEnd()
 
     body:ClearAllPoints()

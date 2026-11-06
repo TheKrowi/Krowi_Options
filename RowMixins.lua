@@ -83,9 +83,8 @@ local function Place(region, row, spec)
     region:SetPoint("LEFT", row, spec[1], spec[2], 0)
 end
 
--- The option row's controls by their place in the geometry, and the one each option type shows
+-- The option row's controls by their place in the geometry; each option type's place is in optionTypes below
 local placedControls = { Toggle = "Toggle", Range = "Range", Select = "Select", Execute = "Execute", Input = "Input", Key = "Key1" }
-local controlOfType = { toggle = "Toggle", range = "Range", select = "Select", execute = "Execute", input = "Input", key = "Key" }
 
 -- [[ A key button ]] --
 -- The game's key binding button (KeyBindingFrameBindingButtonTemplate on UIMenuButtonStretchTemplate, the same on every
@@ -232,6 +231,99 @@ local function RefreshRange(row, option, disabled)
     row.Range:SetEnabled(not disabled)
 end
 
+-- Each option type: Place, its control's place in the row's geometry (where the help says the control starts); Init,
+-- which shows the control and sets it up for the option; Refresh, which sets it to the option's value and greys it out
+-- with the option. A type not in it draws no control.
+local optionTypes = {
+    toggle = {
+        Place = "Toggle",
+        Init = function(row)
+            row.Toggle:Show()
+        end,
+        Refresh = function(row, option, disabled)
+            row.Toggle:SetChecked(option:Get() and true or false)
+            row.Toggle:SetEnabled(not disabled)
+        end,
+    },
+    range = {
+        Place = "Range",
+        Init = function(row, option)
+            InitRange(row, option)
+        end,
+        Refresh = function(row, option, disabled)
+            RefreshRange(row, option, disabled)
+        end,
+    },
+    select = {
+        Place = "Select",
+        -- The arrows step through the menu's radios, so a choice made with them asks and sets as a click in the list does
+        Init = function(row, option, window)
+            local dropdown = row.Select.Dropdown
+            dropdown:SetupMenu(function(_, root)
+                for _, pair in ipairs(option:GetValues()) do
+                    root:CreateRadio(tostring(pair[2]), function() return option:Get() == pair[1] end, function()
+                        local function Choose()
+                            option:Set(pair[1])
+                            window:OnOptionChanged(option)
+                        end
+                        -- option.Confirm(value) -> the question the window asks before the choice is made
+                        if option.Confirm then window:AskConfirm(option:Confirm(pair[1]), Choose) else Choose() end
+                    end)
+                end
+            end)
+            if dropdown.SetDefaultText then dropdown:SetDefaultText(option.Placeholder or "") end
+            row.Select:Show()
+        end,
+        Refresh = function(row, _, disabled)
+            row.Select.Dropdown:GenerateMenu()
+            row.Select:SetEnabled(not disabled) -- the arrows' frame enables its dropdown and its arrows
+        end,
+    },
+    execute = {
+        Place = "Execute",
+        Init = function(row, option)
+            row.Execute:SetText(option:GetButtonText())
+            row.Execute:Show()
+        end,
+        Refresh = function(row, _, disabled)
+            row.Execute:SetEnabled(not disabled)
+        end,
+    },
+    input = {
+        Place = "Input",
+        Init = function(row)
+            row.Input:Show()
+        end,
+        Refresh = function(row, option, disabled)
+            if not row.Input:HasFocus() then row.Input:SetText(option:Get() or "") end
+            row.Input:SetEnabled(not disabled)
+        end,
+    },
+    key = {
+        Place = "Key",
+        Init = function(row, option)
+            row.Key1:Show()
+            row.Key2:SetShown(option.Slots and option.Slots[2] ~= nil)
+        end,
+        Refresh = function(row, option, disabled, strings)
+            local inCombat = row.Window:InCombat()
+            for slot, button in ipairs({ row.Key1, row.Key2 }) do
+                local slotOption = option.Slots and option.Slots[slot]
+                if slotOption then
+                    -- As the game's Keybindings page shows them (BindingUtil.lua): no key in grey and a little faded, the
+                    -- button waiting for a key lit
+                    local key = slotOption:Get()
+                    local text = row.Capturing == slot and strings.PressAKey or key and key ~= "" and GetBindingText(key)
+                    button:SetText(text or GRAY_FONT_COLOR:WrapTextInColorCode(strings.NotBound))
+                    button:SetAlpha(text and 1 or 0.8)
+                    button.SelectedHighlight:SetShown(row.Capturing == slot)
+                    button:SetEnabled(not disabled and not inCombat)
+                end
+            end
+        end,
+    },
+}
+
 function OptionRowMixin:Init(element, window)
     -- A recycled row must not bind the next key to its new option, nor refresh the option it showed before
     self.Option = nil
@@ -250,46 +342,17 @@ function OptionRowMixin:Init(element, window)
     for place, key in next, placedControls do
         Place(self[key], self, geometry[place])
     end
-    self.Range:SetWidth(250) -- the row may have drawn a check box's slider before
+    self.Range:SetWidth(lib.Geometry.SliderWidth) -- the row may have drawn a check box's slider before
     self.Label:SetText(option:GetLabel())
 
-    local t = option.Type
-    if t == "toggle" then
-        self.Toggle:Show()
-    elseif t == "range" then
-        InitRange(self, option)
-    elseif t == "select" then
-        -- The arrows step through the menu's radios, so a choice made with them asks and sets as a click in the list does
-        local dropdown = self.Select.Dropdown
-        dropdown:SetupMenu(function(_, root)
-            for _, pair in ipairs(option:GetValues()) do
-                root:CreateRadio(tostring(pair[2]), function() return option:Get() == pair[1] end, function()
-                    local function Choose()
-                        option:Set(pair[1])
-                        window:OnOptionChanged(option)
-                    end
-                    -- option.Confirm(value) -> the question the window asks before the choice is made
-                    if option.Confirm then window:AskConfirm(option:Confirm(pair[1]), Choose) else Choose() end
-                end)
-            end
-        end)
-        if dropdown.SetDefaultText then dropdown:SetDefaultText(option.Placeholder or "") end
-        self.Select:Show()
-    elseif t == "execute" then
-        self.Execute:SetText(option:GetButtonText())
-        self.Execute:Show()
-    elseif t == "input" then
-        self.Input:Show()
-    elseif t == "key" then
-        self.Key1:Show()
-        self.Key2:SetShown(option.Slots and option.Slots[2] ~= nil)
-    end
+    local optionType = optionTypes[option.Type]
+    if optionType then optionType.Init(self, option, window) end
     local with, control = self.With, WithControl(self)
     if with then
         control:ClearAllPoints()
         control:SetPoint("LEFT", self.Toggle, "RIGHT", 5, 0)
         if with.Type == "range" then
-            self.Range:SetWidth(214)
+            self.Range:SetWidth(lib.Geometry.WithSliderWidth)
             InitRange(self, with)
         else
             self.Execute:SetText(with:GetButtonText())
@@ -322,36 +385,8 @@ function OptionRowMixin:Refresh()
     self.ChangedBar:SetShown(changed)
     self.Reset:SetShown(changed and UnderMouse(self)) -- a change made under the mouse shows the arrow at once
 
-    local t = option.Type
-    if t == "toggle" then
-        self.Toggle:SetChecked(option:Get() and true or false)
-        self.Toggle:SetEnabled(not disabled)
-    elseif t == "range" then
-        RefreshRange(self, option, disabled)
-    elseif t == "select" then
-        self.Select.Dropdown:GenerateMenu()
-        self.Select:SetEnabled(not disabled) -- the arrows' frame enables its dropdown and its arrows
-    elseif t == "execute" then
-        self.Execute:SetEnabled(not disabled)
-    elseif t == "input" then
-        if not self.Input:HasFocus() then self.Input:SetText(option:Get() or "") end
-        self.Input:SetEnabled(not disabled)
-    elseif t == "key" then
-        local inCombat = self.Window:InCombat()
-        for slot, button in ipairs({ self.Key1, self.Key2 }) do
-            local slotOption = option.Slots and option.Slots[slot]
-            if slotOption then
-                -- As the game's Keybindings page shows them (BindingUtil.lua): no key in grey and a little faded, the button
-                -- waiting for a key lit
-                local key = slotOption:Get()
-                local text = self.Capturing == slot and strings.PressAKey or key and key ~= "" and GetBindingText(key)
-                button:SetText(text or GRAY_FONT_COLOR:WrapTextInColorCode(strings.NotBound))
-                button:SetAlpha(text and 1 or 0.8)
-                button.SelectedHighlight:SetShown(self.Capturing == slot)
-                button:SetEnabled(not disabled and not inCombat)
-            end
-        end
-    end
+    local optionType = optionTypes[option.Type]
+    if optionType then optionType.Refresh(self, option, disabled, strings) end
     -- With greys out with the toggle, or by itself (a threshold while its check box is off)
     if with then
         local withDisabled = disabled or with:IsDisabled()
@@ -409,7 +444,8 @@ function OptionRowMixin:OnEnter(control)
         self.Window:OnRowEnter(self.With, self, self.Range:GetLeft() - self:GetLeft())
         return
     end
-    local kind = self.Geometry and self.Option and controlOfType[self.Option.Type]
+    local optionType = self.Geometry and self.Option and optionTypes[self.Option.Type]
+    local kind = optionType and optionType.Place
     self.Window:OnRowEnter(self.Option, self, kind and lib.RowX(self.Geometry[kind], self:GetWidth()))
 end
 
@@ -569,7 +605,7 @@ end
 
 function TabRowMixin:OnEnter()
     self.Hover:Show()
-    self.Window:OnRowEnter(self.Element.Item.Show, self, 34) -- where ShowCheck stands (RowFrames.lua)
+    self.Window:OnRowEnter(self.Element.Item.Show, self, lib.Geometry.TabCheckX) -- where ShowCheck stands (RowFrames.lua)
 end
 
 function TabRowMixin:OnLeave()
@@ -614,13 +650,14 @@ end
 
 -- [[ Cards: a section's picture, name and line, three to a row (docs/work/2026-11-02-overview-cards) ]] --
 -- A card is { Picture, Width, Height, TexCoords, Part } (a picture as the help pane draws it, Part optional, see
--- CardCrop) or { Icon }, and Name, Text, IsNew and OnClick. The cards and the 12 between them fill the row. A picture fills the 86 high area inside the card's 1 px
--- border, cut to it from its top left, as the mockup's thumbnails were (object-fit: cover); the name and the line stand 10
--- in from the card's sides. The fonts are RowFrames.lua's.
+-- CardCrop) or { Icon }, and Name, Text, IsNew and OnClick. The cards and the 12 between them fill the row. A picture
+-- fills the 86 high area inside the card's 1 px border (lib.Geometry.CardPictureHeight, Kinds.lua), cut to it from its
+-- top left, as the mockup's thumbnails were (object-fit: cover); the name and the line stand 10 in from the card's
+-- sides. The fonts are RowFrames.lua's.
 lib.CardColumns = 3
-local cardGap, cardBorder, pictureHeight = 12, 1, 86
+local cardGap, cardBorder = 12, 1
 local cardTextInset, nameTop, lineGap, cardBottom, newGap = 10, 8, 3, 10, 6
-local borderColor, borderHoverColor = { 1, 1, 1, 0.12 }, { 1, 0.82, 0, 0.6 }
+local borderHoverColor = { 1, 0.82, 0, 0.6 } -- the border under the mouse; out of it, lib.Geometry.CardBorderColor
 
 function lib.CardWidth(rowWidth)
     return (rowWidth - (lib.CardColumns - 1) * cardGap) / lib.CardColumns
@@ -630,6 +667,7 @@ end
 -- texture a picture fills (the help pictures' Pictures.lua). Part = { X, Y } moves the cut from the top left (0) to the
 -- bottom right (1) of what does not fit, as CSS's object-position does.
 function lib.CardCrop(picture, cardWidth)
+    local pictureHeight = lib.Geometry.CardPictureHeight
     local width = cardWidth - 2 * cardBorder
     local scale = math.max(width / picture.Width, pictureHeight / picture.Height)
     local coords, part = picture.TexCoords or { 0, 1, 0, 1 }, picture.Part or {}
@@ -648,7 +686,8 @@ function lib.CardRowHeight(window, element)
         nameHeight = math.max(nameHeight, window:MeasureText(card.Name, "GameFontNormal", 1000))
         if card.Text and card.Text ~= "" then lineHeight = math.max(lineHeight, window:MeasureText(card.Text, "GameFontDisableSmall", lineWidth)) end
     end
-    return 2 * cardBorder + pictureHeight + nameTop + nameHeight + (lineHeight > 0 and lineGap + lineHeight or 0) + cardBottom + cardGap
+    return 2 * cardBorder + lib.Geometry.CardPictureHeight + nameTop + nameHeight + (lineHeight > 0 and lineGap + lineHeight or 0) + cardBottom
+        + cardGap
 end
 
 lib.Mixins.CardRow = lib.Mixins.CardRow or {}
@@ -710,7 +749,7 @@ end
 
 function CardMixin:SetHovered(hovered)
     self.Hover:SetShown(hovered)
-    local color = hovered and borderHoverColor or borderColor
+    local color = hovered and borderHoverColor or lib.Geometry.CardBorderColor
     for _, edge in ipairs(self.Edges) do edge:SetColorTexture(unpack(color)) end
 end
 

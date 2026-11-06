@@ -26,7 +26,7 @@ local function Row(...) return build.Row(...) end
 -- Blizzard's list templates run code that would taint its window (docs/work/2026-10-30-options-settings-look)
 
 function build.NavButton(parent)
-    local button = Row("Button", parent, 20)
+    local button = Row("Button", parent)
     button.Texture = button:CreateTexture(nil, "BACKGROUND")
     button.Texture:SetPoint("CENTER")
     button.Texture:Hide()
@@ -43,7 +43,7 @@ function build.NavButton(parent)
 end
 
 function build.NavHeader(parent)
-    local header = Row("Frame", parent, 30)
+    local header = Row("Frame", parent)
     header.Background = header:CreateTexture(nil, "ARTWORK")
     header.Background:SetPoint("TOPLEFT")
     header.Label = Text(header, "OVERLAY", "GameFontHighlightMedium", "LEFT")
@@ -52,13 +52,13 @@ function build.NavHeader(parent)
 end
 
 function build.NavSpacer(parent)
-    return Row("Frame", parent, 18)
+    return Row("Frame", parent)
 end
 
 -- [[ Help pane blocks ]] --
 
 function build.HelpText(parent)
-    local block = Row("Frame", parent, 20)
+    local block = Row("Frame", parent)
     block.Text = Text(block, "ARTWORK", "GameFontHighlight", "LEFT", "TOP")
     block.Text:SetPoint("TOPLEFT", 4, -2)
     block.Text:SetPoint("BOTTOMRIGHT", -4, 0)
@@ -66,7 +66,7 @@ function build.HelpText(parent)
 end
 
 function build.HelpPicture(parent)
-    local block = Row("Button", parent, 100)
+    local block = Row("Button", parent)
     block.Picture = block:CreateTexture(nil, "ARTWORK")
     block.Picture:SetPoint("TOPLEFT", 4, -4)
     block.Highlight = Color(block, "HIGHLIGHT", 1, 1, 1, 0.12)

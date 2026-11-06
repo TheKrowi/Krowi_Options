@@ -33,9 +33,6 @@ local function Ask(fallback, func, ...)
     return fallback
 end
 
--- The window's least height, as the layout keeps it (minHeight in WindowLayout.lua)
-local minHeight = 560
-
 -- [[ The window ]] --
 -- Every file of the window adds its methods to this one table: this core, and its parts (WindowLayout.lua,
 -- WindowPage.lua, WindowSearch.lua, WindowHelp.lua). Each mixin table on lib.Mixins is added to, never replaced: a
@@ -60,9 +57,10 @@ function WindowMixin:OnLoad()
 end
 
 -- The window's own state: the newest of the addons' blocks, its fields checked already (Krowi_Options.lua, ReadWindow);
--- every addon keeps a copy (lib.SetShared)
+-- every addon keeps a copy (lib.SetShared). Of the size only the height is kept, at least lib.Geometry.MinHeight
+-- (Kinds.lua) as the layout keeps it (WindowLayout.lua): the width follows the pane alone.
 function WindowMixin:Init(window)
-    if window.Size then self:SetHeight(math.max(window.Size[2], minHeight)) end -- the width follows the pane alone
+    if window.Size then self:SetHeight(math.max(window.Size[2], lib.Geometry.MinHeight)) end
     self.PaneCollapsed = window.PaneCollapsed and true or false
     self:ApplyWidth()
     if window.Point then

@@ -32,6 +32,28 @@ if not KROWI_LIBMAN then return end
 local sub, lib = KROWI_LIBMAN:NewSubmodule("ElementKinds", 0)
 if not sub then return end
 
+-- [[ Geometry ]] --
+-- The numbers that a row's builder (RowFrames.lua) and its mixin (RowMixins.lua), or two parts of the window, both use,
+-- once. Each entry is a plain value, written by this file only; every other file reads it where it uses it, never into a
+-- local at load, so the numbers of the newest copy of this file are the ones every file draws with.
+lib.Geometry = lib.Geometry or {}
+local geometry = lib.Geometry
+-- A card's picture area, under its 1 px border (RowFrames.lua's Card; RowMixins.lua's CardCrop and CardRowHeight)
+geometry.CardPictureHeight = 86
+-- A card's border and the line under its picture (RowFrames.lua's Card), and the border again when the mouse leaves the
+-- card (RowMixins.lua's SetHovered): r, g, b, a
+geometry.CardBorderColor = { 1, 1, 1, 0.12 }
+-- Where a tab row's Show check box stands from the row's left (RowFrames.lua's TabRow), where its help says the control
+-- starts (RowMixins.lua's TabRow OnEnter)
+geometry.TabCheckX = 34
+-- An option row's slider (RowFrames.lua's OptionRow, RowMixins.lua's Init), and the narrower one after a check box
+geometry.SliderWidth = 250
+geometry.WithSliderWidth = 214
+-- The help pane's width (WindowHelp.lua, WindowLayout.lua) and the window's least height (WindowMixin.lua's Init,
+-- WindowLayout.lua's ApplyWidth)
+geometry.HelpWidth = 380
+geometry.MinHeight = 560
+
 lib.Kinds = lib.Kinds or {}
 local kinds = lib.Kinds
 
