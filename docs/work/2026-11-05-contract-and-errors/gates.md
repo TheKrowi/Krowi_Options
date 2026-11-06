@@ -8,3 +8,4 @@ Class: library
 | 2026-11-05 | design | Whose shared window state wins after an addon was off and comes back | newest change wins | "Newest change wins (Recommended)" | took |
 | 2026-11-05 | design | How the window handles a consumer addon's mistake or bad data | contain at each call | "Contain at each call (Recommended)" | took |
 | 2026-11-05 | plan | The plan: this fix, Krowi_AchievementFilter's test branch, the kit's two-copy gate | approve | approved in plan mode | took |
+| 2026-11-06 | merge | Krowi_Options #4, then Krowi_AchievementFilter #398 (its library pointer on #4's merge), then Krowi_ClaudeKit #14 | merge all three, in that order | "merge all 3" | took |
