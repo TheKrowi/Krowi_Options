@@ -16,3 +16,4 @@ Class: harness
 | 2026-11-06 | design | The packaging exclusion list: a per-repo file read by the addon manager and the kit | _Packaging/Exclude.txt | first: "1. But why txt?"; after the restatement: "_Packaging/.pkgmeta" | other |
 | 2026-11-06 | plan | The plan: six phases, phase 1 in detail (exclusion list, harness, test addon, ported steps, paired kit, addon manager and KAF PRs), no full headless fake of the game's frames | approve | approved in plan mode | took |
 | 2026-11-06 | merge | Phase 1: Krowi_Options #5, then Krowi_AchievementFilter #399 | merge both, library first | "Merge both, library #5 first (Recommended)" | took |
+| 2026-11-06 | plan | Phase 2: the plan (step 0 the safety net and -Consumers, then the split in steps 1 to 11, three Opus hand-offs verified by me, look gate at the end) | approve | approved in plan mode | took |

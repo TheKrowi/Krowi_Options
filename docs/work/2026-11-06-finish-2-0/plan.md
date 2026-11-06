@@ -68,3 +68,43 @@ Lua 5.1 syntax via the plugin hook; `Tests/headless/run.lua`; KAF lint and headl
 - Headless `Tests\headless\run.lua`: 83 passed, of which 27 are open defects (Recorded differs from Target), 0 failed.
 - In game, Krowi_OptionsTests: Retail 60 passed, 0 failed; Mists 60 passed, 0 failed (all), smoke 24/0; BugGrabber clean. Beside it, KAF's own suite before its cut: 96 passed on both clients.
 - Krowi_AchievementFilter #399 (the cut, `harness`): Retail `options` 30/0/1 skipped and `escape` 34/34, Mists `options` 30/0/1, lint 0 errors.
+
+## Phase 2: the structure (plan approved in plan mode, 2026-11-06)
+
+Intent, spec (Opus's design, decided by Krowi 2026-11-06) and the phase 1 results are on `main` of `Krowi_Libraries\Krowi_Options` (`55320bee`). Class `harness` (gates ask; phase 2 adds library code, which ranks below it). Worktree `...\Krowi_Options\.claude\worktrees\feature-2026-11-06-structure`, branch `feature/2026-11-06-structure` from `main`. Behaviour must not change: players see nothing.
+
+### Context
+`WindowMixin.lua` is 1197 lines and 52 methods with about 25 state flags; each element kind is handled in about 8 places; geometry numbers are copied between builders and mixins; the public/internal line is a comment. Decided: five window files plus `Kinds.lua`, one table per kind, `lib.Geometry`, internals under `lib.Internal`, every file at minor 0 (KAF 105.0 waits), no stubs.
+
+### A gap from phase 1 to close first
+Phase 1's spec asked for a recorded snapshot of Search results and every section's `Signature`, a recorded list of `lib.Mixins.Window`'s method names, and a two-copy check that every window method survives when only a newer core file loads. The `Bugs` suite does not hold them. They are step 0: the refactor's safety net, written and green on today's code before any code moves.
+
+### Files that change
+- **Step 0 (tests and tools only):** `Tests/headless/suites/Structure.lua` (new, listed in `run.lua`): the sorted method names of `lib.Mixins.Window`, `lib.Mixins.*` (rows) and `lib.Build`, recorded; `lib.Search` results and each section's `Signature` on the test addon's fixture tab (`Tests/Krowi_OptionsTests/Headless.lua` loads it), recorded as strings; a two-copy case with `h.LoadCopy` (a full copy, then a copy where only the core file's minor is raised) that checks every window method is still present. `.claude/tools/Deploy-TestAddon.ps1`: a `-Consumers` switch that deploys this checkout's library into each installed consumer's `Libs\Krowi_Options` (Krowi_AchievementFilter, and Krowi_ExtendedVendorUI where it embeds one), because KAF loads first and at equal minors its embedded copy wins, so the test addon would test KAF's old files (the workspace rule for testing a library through a consumer). `Deploy.ps1` of KAF puts its own copy back afterwards.
+- **Library files, in order** (design in `spec.md`, "The split"):
+  1. `WindowMixin.lua:133-134`: add to `lib.Mixins.Window` instead of replacing it.
+  2. `Kinds.lua` (new, `NewSubmodule("ElementKinds", 0)`, in `Krowi_Options.xml` after Localization): `lib.Kinds` with `rowKinds`, row heights and `InitList`.
+  3. `Flatten` and the search fields into the kinds (`Search.lua`); snapshot unchanged.
+  4. `Signature`, `RowShows`, `ScrollToOption` read the kinds' `Options`/`Hidden`; snapshot unchanged.
+  5. `WindowHelp.lua`: help pane, kicker, section and search help, Show me with its secure overlay, hover, tooltip. Then `krowi:taint-reviewer`.
+  6. `WindowSearch.lua`: `SearchElements`, `OnSearch`, the box and check box hooks.
+  7. `WindowPage.lua`: nav buttons, `ShowSection`, `FillPage`, `Refresh`, `RefreshFooter`, `OnOptionChanged`, the confirm, Defaults.
+  8. `WindowLayout.lua`: inner frame, width, measuring, the nav scroll bar, `EndFill`, `Layout`, pane collapse, resize and drag, atlas slicing. `WindowMixin.lua` stays as the core (`OnLoad` calls each part's `Load<Part>`, `Init`, `OnShow`, `OnHide`, `OnEvent`, `Open`, `ShowTab`, `RefreshTabs`, `ApplyStrings`).
+  9. `lib.Geometry` (card picture height 86 and border colour, tab row check box x 34, slider widths 250 and 214), the builders' dead row heights removed (SubHeading's 24 goes, the 26 that applies stays), the option row's per-type chains as a file-local table.
+  10. `lib.Internal` (`Tabs`, `Frame`, `Shared`, `SetShared`, `GetFrame`, `Mixins`, `Build`, `Kinds`, `Geometry`, `Search`, `Flatten`, `InitList`, `RowGeometry`, `RowX`, the `Card*` functions, `WindowWidth`; public stays on `lib`: `CreateWindow`, `GetStrings`, `Markup`, `WindowName`, the submodule tables); the headless suites, the test addon and KAF's three kept reads (`window-tabs`, `overview-cards`, `library-strings`) follow in the same change; a test checks `lib`'s keys. Paired KAF pull request.
+  11. `CLAUDE.md`: the versioning table's new rows, "shared tables on `lib` are added to, never replaced", "a released file is never deleted, only stubbed with a raised minor", "moving a method raises both files' minors" (from release on).
+- Every new file: copyright block, `if not KROWI_LIBMAN then return end`, its own `Protected`, calls to other files through `lib.X` at call time or `self:Method()`, never captured into a local at load (the kit's `Find-LoadTimeCaptures` check for the two-copy gate looks for exactly that).
+
+### Order of work
+Each numbered step is one commit and ends with: Lua 5.1 syntax, `Tests\headless\run.lua` green (Structure's recorded method-name list, snapshot and two-copy case unchanged), and the test addon's smoke in game on Retail (`Deploy-TestAddon.ps1 -Consumers`, then `Run-GameTests.ps1 smoke`). After steps 4, 8 and 10 the full test addon run on Retail and Mists and KAF's headless `options` and `escape`. After step 8 and again at 10, KAF's `/kaftest options` and `escape` in game on Retail and Mists. Opus does the code of steps 1 to 4, 5 to 8 and 9 to 10 in three hand-offs from this plan and `spec.md`; I verify each step myself (suite, game, a read of the diff) before committing and give back what the agent got wrong. Then the full proof, `/code-review`, the taint reviewer on the diff, `Find-DeprecatedApi.ps1` (no Blizzard-facing change is planned), and the **look gate**: Krowi sees the window in game on Retail and Mists (a gate row). PRs: this library's, and KAF's paired one for step 10.
+
+### Risks
+- Rows and layout are proven in game only: the headless stand-in builds no rows. The test addon's 60 live steps are the proof; a method lost in a move errors only when called, which the method-name list guards.
+- A half-upgraded mix of old and new files from two embedded copies (the file split) fails if a core file's minor were raised or a file deleted: every file stays at minor 0 because nothing of `Krowi_Options_2` has shipped and KAF 105.0 waits (Krowi's decision); each window file adds to `lib.Mixins.Window` and never replaces it. A two-copy gate run (phase 5) proves it with real mixes.
+- The test addon tests KAF's or KEVU's embedded copy unless every copy is the worktree's: `-Consumers` makes them so; the run's last lines name the winning minors.
+- `lib.Internal` touches names KAF's three kept steps and the test addon read: the paired changes land together, KAF's after the library's.
+- Taint: the help step moves the Show me secure overlay and `Krowi_Tooltip` use; no Blizzard frame gets a new field and `GameTooltip` is not used; `krowi:taint-reviewer` after step 5 and on the final diff.
+- Opus hand-offs write blind to the game: verification between hand-offs is not optional.
+
+### Proof
+Headless 83+ passed with Structure green and the 27 open `Bugs` scenarios unchanged (phase 2 fixes none); the test addon on Retail and Mists, all steps; KAF `options` 30/0 and `escape` 34/34 on Retail and `options` on Mists; BugGrabber clean; the line counts of the new files in the PR; Krowi's look in game; the gate rows (plan now, look and merge later); `Get-ChangeClass.ps1` before each PR.
