@@ -4,7 +4,7 @@ Krowi_Options (`Krowi_Options_2`) is a World of Warcraft library in Lua 5.1: an 
 
 It was made inside Krowi_AchievementFilter (`Krowi_Options/`, 1.0 was a copy of it), whose `docs/work/` holds its design history (2026-10-25-options-revamp onwards). Since 2.0 it is edited here only, and KAF embeds it as the submodule `Libs/Krowi_Options` (docs/work/2026-11-04-krowi-options-library).
 
-There is no build, lint or test step here: a consumer addon in the game is the test harness, and KAF's headless `options` suite loads the library from its `Libs/`. The `krowi` plugin (`.claude/settings.json`) syntax-checks every edited `.lua` with Lua 5.1 and guards the known tooling traps.
+There is no build or lint step here. The library tests itself (since 2026-11-06; Krowi: "Kaf should test what it can see. Krowi options should cover the internals"): a headless suite in `Tests/headless` and a test addon, `Tests/Krowi_OptionsTests`, that hosts the library in game without any consumer (Testing below). Krowi_AchievementFilter's own `options` suite tests only what KAF can see, through the library's public surface. The `krowi` plugin (`.claude/settings.json`) syntax-checks every edited `.lua` with Lua 5.1 and guards the known tooling traps. `_Packaging/.pkgmeta` keeps `Tests/` out of the deploy and the release zip, also inside the addons that embed the library.
 
 ## Clients and loading
 
@@ -21,7 +21,7 @@ A second embedded copy must load without a warning and must not mix its code wit
 - **The globals are the window's name and the template children Blizzard names after it.**
   - The library's own: the window's frame name, `lib.WindowName` (`Krowi_Options_2_Window`; 1.x's was `Krowi_OptionsWindow`).
   - Blizzard's templates add, through their `$parent` names: `Krowi_Options_2_WindowClearButton` and `…SearchIcon` (`SearchBoxTemplate`), and `…Text` (`UIPanelButtonNoTooltipTemplate`, rewritten by every such button); on Mists also `…TitleBg` (`SettingsFrameTemplate`).
-  - No other code reads them. KAF's `options` step `library-globals-window` lists them with the window built and fails on any global outside the window's name (Retail and Mists, 2026-11-05).
+  - No other code reads them. The test addon's step `library-globals-window` lists them with the window built and fails on any global outside the window's name (Retail and Mists, 2026-11-05 in KAF, since 2026-11-06 here).
 
 ## Versioning
 
@@ -79,12 +79,17 @@ Run the `krowi:taint-reviewer` agent after changing any of these:
 - No semicolons. Each Lua file starts with the copyright block, a blank line, `---@diagnostic disable: undefined-global`, a blank line, then `if not KROWI_LIBMAN then return end` (a standalone install loaded before any Krowi addon stays silent), its registration, and `if not lib then return end` (or `if not sub`).
 - CRLF on disk (LF in git, `core.autocrlf=true`), no BOM, no final newline.
 
-## Testing in game
+## Testing
 
-Test through KAF. Do not deploy this repo on its own, except for the two-copy test below.
-1. Bump the minors of the files you changed; at equal minors the first-loaded copy wins and the test proves nothing.
-2. In a KAF worktree, point the submodule at the change: `git -C Libs\Krowi_Options fetch "E:\World of Warcraft Addon Development\Krowi_Libraries\Krowi_Options" <branch>`, then `git -C Libs\Krowi_Options checkout FETCH_HEAD`. Deploy that worktree and `/reload`. Commit the new pointer only after this library is released.
-3. `/kaftest options` (or `/kaftest options <step or start of names>` for part of it) on Retail and Mists Classic, `/kaftest escape` on Retail.
+**Headless**, from the repo root or a worktree's, with the kit's Lua 5.1: `& "E:\World of Warcraft Addon Development\Krowi_ClaudeKit\tools\lua51\lua.exe" Tests\headless\run.lua`. It loads the library's files in the order `Krowi_Options.xml` lists them on Krowi_Util's real LibStub, AceLocale and LibMan (found beside this repo), and runs the suites in `Tests/headless/suites`: `ReviewFixes` and `ContractAndErrors` (the checks of the 2.0 reviews), `Bugs` (a Recorded/Target scenario per open defect: it passes while the code behaves as recorded, the fix flips Recorded to Target in the same change), and `TestAddon` (the frame-free scenarios of the test addon). A new suite file goes in `run.lua`'s list. The stand-in has no real frames, ScrollBox or templates, so nothing that draws is proven here.
+
+**In game**, through the test addon `Krowi_OptionsTests` (`/kotest`, `Tests/Krowi_OptionsTests`): a fixture tab with every element kind and option type, a second tab, the frame-free scenarios and the live steps (open, tabs, sections, toggles, ranges, inputs, hover help, search, confirm, pane, close, restore, BugGrabber). It needs no consumer addon, only Krowi_Util:
+1. `& ".claude\tools\Deploy-TestAddon.ps1" -WhatIf`, then without `-WhatIf`, per client: it mirrors the test addon, deploys this checkout into its `Libs\Krowi_Options` (the kit's `Deploy.ps1` through `-Destination`) and Krowi_Util into its `Libs\Krowi_Util`. The game finds a new addon folder only at client start.
+2. `& ".claude\tools\Run-GameTests.ps1" [all|smoke|<step>] -Client Retail|Classic|...` runs `/kotest run`, reloads and reads the results (`Read-GameTests.ps1`, the saved variable `Krowi_OptionsTests.lua`) and BugGrabber; exit 0 only when every run passed something and nothing failed. Clients the kit can start: Retail, Mists, Forever.
+3. Other consumers loaded beside it share the library: **at equal minors the first-loaded copy of each file wins, and KAF and Krowi_ExtendedVendorUI load first**, so a run tests their embedded copy unless this checkout's minors are higher; the run's last lines name which consumers are loaded and each file's winning minor. So bump the minors of the files you changed, deploy the consumers current (a stale KAF install once made two steps fail), or turn them off on the test character.
+4. A TOC must start with its `## Interface` line: the Mists client read nothing of the test addon's TOC while a comment block came first (checked in game 2026-11-06), Retail did.
+
+Test the consumers too: Krowi_AchievementFilter's `/kaftest options` and `escape` (Retail and Mists) after a library change, through a KAF worktree whose submodule points at the change: `git -C Libs\Krowi_Options fetch "E:\World of Warcraft Addon Development\Krowi_Libraries\Krowi_Options" <branch>`, then `git -C Libs\Krowi_Options checkout FETCH_HEAD`; commit the new pointer only after this library is released.
 
 **Two copies:** deploy this checkout as its own `AddOns\Krowi_Options` folder next to KAF. It loads after KAF, so it finds KAF's `KROWI_LIBMAN` and AceLocale. With equal minors nothing of it may run; with every minor raised, every file of it runs. BugGrabber must show no warning either way. Remove the folder after.
 

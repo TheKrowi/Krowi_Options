@@ -1,0 +1,9 @@
+<!--
+    Copyright (c) 2026 Krowi
+    Licensed under the terms of the LICENSE file in this repository.
+ -->
+
+<Ui>
+    <Include file="Libs\Files.xml"/>
+    <Include file="Tests\Files.xml"/>
+</Ui>

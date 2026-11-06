@@ -1,0 +1,12 @@
+<!--
+    Copyright (c) 2026 Krowi
+    Licensed under the terms of the LICENSE file in this repository.
+
+    Neither folder is in the repo: .claude/tools/Deploy-TestAddon.ps1 deploys Krowi_Util from its own checkout and the
+    library from this checkout's root into Libs in the game's copy of this addon, as an addon embeds them.
+ -->
+
+<Ui>
+    <Include file="Krowi_Util\Krowi_Util.xml"/>
+    <Include file="Krowi_Options\Krowi_Options.xml"/>
+</Ui>

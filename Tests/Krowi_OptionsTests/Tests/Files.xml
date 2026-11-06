@@ -1,0 +1,11 @@
+<!--
+    Copyright (c) 2026 Krowi
+    Licensed under the terms of the LICENSE file in this repository.
+ -->
+
+<Ui>
+    <Script file="Fixtures.lua"/>
+    <Script file="Scenarios.lua"/>
+    <Script file="Steps.lua"/>
+    <Script file="Runner.lua"/>
+</Ui>

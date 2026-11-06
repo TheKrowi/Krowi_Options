@@ -1,0 +1,4 @@
+# What stays out of the deploy and the release zip, beyond the built-in names (Krowi_ClaudeKit tools/PkgMeta.ps1,
+# Krowi_AddonManager zipper.py). Only ignore: is read.
+ignore:
+  - Tests
