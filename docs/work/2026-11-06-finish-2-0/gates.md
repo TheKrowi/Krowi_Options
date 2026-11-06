@@ -1,5 +1,5 @@
 # Gates: 2026-11-06-finish-2-0
-Class: library
+Class: harness
 
 | Date | Gate | Question | Recommended | Answer | Outcome |
 |---|---|---|---|---|---|
