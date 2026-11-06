@@ -61,7 +61,7 @@ $age = (Get-Date) - $file.LastWriteTime
 ""
 
 # The headless lines of the scenarios, so the game's lines can be marked against them
-$headless = Join-Path ([IO.Path]::GetTempPath()) 'Krowi_OptionsTests-headless.txt'
+$headless = Join-Path ([IO.Path]::GetTempPath()) ("Krowi_OptionsTests-headless-$PID.txt")
 $ErrorActionPreference = 'Continue'
 $headlessLines = @(& $Lua $headlessRunner 2>&1 | ForEach-Object { "$_" })
 $ErrorActionPreference = 'Stop'
@@ -99,3 +99,4 @@ foreach ($line in $output) {
 }
 Remove-Item -LiteralPath $headless -ErrorAction SilentlyContinue
 exit $code
+Remove-Item -LiteralPath $headless -ErrorAction SilentlyContinue

@@ -1,3 +1,8 @@
+--[[
+    Copyright (c) 2026 Krowi
+    Licensed under the terms of the LICENSE file in this repository.
+]]
+
 ---@diagnostic disable: undefined-global
 
 -- The frame-free scenarios of the test addon (Tests/Krowi_OptionsTests/Tests/Scenarios.lua), the ones that also run in

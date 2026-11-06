@@ -1,3 +1,8 @@
+--[[
+    Copyright (c) 2026 Krowi
+    Licensed under the terms of the LICENSE file in this repository.
+]]
+
 ---@diagnostic disable: undefined-global
 
 -- The defects left after 2.0 (docs/work/2026-11-05-review-fixes/backlog.md and "Backlog for 2.1" in

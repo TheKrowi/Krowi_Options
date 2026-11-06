@@ -61,7 +61,7 @@ h.NIL = {} -- a Config field left out
 -- read in its place); paths are relative to the folder of the XML that names them
 local function Manifest(xml, folder, files)
     local text = Read(h.root .. folder .. xml):gsub("<!%-%-.-%-%->", "")
-    for tag, file in text:gmatch('<(%a+)%s+file="([^"]+)"') do
+    for tag, _, file in text:gmatch("<(%a+)%s+file=([\"'])(.-)%2") do
         file = file:gsub("\\", "/")
         if tag == "Script" then
             files[#files + 1] = folder .. file
@@ -74,6 +74,9 @@ end
 h.libraryFiles = Manifest("Krowi_Options.xml", "", {})
 assert(#h.libraryFiles >= 6, "Krowi_Options.xml names " .. #h.libraryFiles .. " files")
 
+-- Krowi_Util's files the library needs, by hand: Krowi_Util.xml also loads Colors, Metadata, Credits and its locales,
+-- which want game API the stand-in does not have, and nothing here reads what they define. A Krowi_Util helper the
+-- library starts to use from one of those files goes into this list.
 local utilFiles = { "Libs/LibStub.lua", "Libs/AceLocale-3.0.lua", "LibMan.lua", "Krowi_Util.lua", "Constants.lua", "Strings.lua",
     "LocalizationHelper.lua" }
 

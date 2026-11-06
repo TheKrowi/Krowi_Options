@@ -1,3 +1,8 @@
+--[[
+    Copyright (c) 2026 Krowi
+    Licensed under the terms of the LICENSE file in this repository.
+]]
+
 ---@diagnostic disable: undefined-global
 
 -- The reproductions of the 2.0 code review's findings (docs/work/2026-11-05-review-fixes), moved here from that folder's

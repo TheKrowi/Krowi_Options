@@ -54,6 +54,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent   # .claude\tools -> the checkout's root
 $reader = Join-Path $PSScriptRoot 'Read-GameTests.ps1'
 $kitTools = if ($env:KROWI_CLAUDEKIT) { Join-Path $env:KROWI_CLAUDEKIT 'tools' } else { 'E:\World of Warcraft Addon Development\Krowi_ClaudeKit\tools' }
+. (Join-Path $kitTools 'AddonContext.ps1')
 $send = Join-Path $kitTools 'Send-GameInput.ps1'
 if (-not (Test-Path -LiteralPath $send)) { throw "The kit's Send-GameInput.ps1 not found at $send." }
 
@@ -78,9 +79,14 @@ function Invoke-Kit([string]$What, [hashtable]$Arguments) {
         $code = $LASTEXITCODE
         $out | ForEach-Object { Write-Host "  $_" }
         $last = if ($out) { $out[-1] } else { '' }
-        if ($code -eq 0 -or $last -notmatch 'try again in (\d+) s') { return $code }
+        # A refusal that says when to try again, or that someone used the keyboard or mouse while the command ran (the
+        # player is at the PC: wait until they are not), is retried; any other refusal is final
+        $wait = $null
+        if ($last -match 'try again in (\d+) s') { $wait = [int]$Matches[1] + 2 }
+        elseif ($last -match 'someone else used the keyboard or mouse') { $wait = 20 }
+        if ($code -eq 0 -or $null -eq $wait) { return $code }
         if ((Get-Date) -gt $retryUntil) { Write-Host "  $What gave up: still refused after 10 minutes"; return $code }
-        Start-Sleep -Seconds ([int]$Matches[1] + 2)
+        Start-Sleep -Seconds $wait
     }
 }
 $started = $false
@@ -105,6 +111,15 @@ if ($state -match 'client: not running') {
 }
 
 if ($state -match 'state: in the world') {
+    # The game finds a new addon folder only when it starts: a client running since before the folder was made would
+    # type /kotest into the void and the run would wait its whole timeout
+    $clientFolder = Get-ClientFolder $Client
+    $addonFolder = Join-Path $clientFolder 'Interface\AddOns\Krowi_OptionsTests'
+    $running = @(Get-Process -Name 'Wow*' -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path -like "$clientFolder*" })
+    if (-not $started -and (Test-Path -LiteralPath $addonFolder) -and $running.Count -gt 0 -and
+        (Get-Item -LiteralPath $addonFolder).CreationTimeUtc -gt ($running | Sort-Object StartTime | Select-Object -First 1).StartTime.ToUniversalTime()) {
+        Stop-Run "the $Client client started before the test addon folder was first deployed, so it does not know /kotest: Krowi closes it, and this tool starts it."
+    }
     "/reload, so the deployed files and the marker load"
     if ((Invoke-Kit '/reload' @{ Command = '/reload' }) -ne 0) { Stop-Run 'the first /reload failed' }
 } elseif ($state -match 'state: character select') {
@@ -149,9 +164,15 @@ if ($reloaded -eq 0) {
         $read
         $summary = @($read | Where-Object { $_ -match '^suite .+: \d+ passed, \d+ failed' })[0]
         if (-not $summary) { "Run $n has no 'suite ...: N passed, M failed' line; it counts as failed" }
-        if (-not ($summary -match '^suite .+: (\d+) passed, 0 failed' -and [int]$Matches[1] -gt 0)) { $failedRuns++ }
+        $passedSomething = $summary -match '^suite .+: (\d+) passed, 0 failed' -and [int]$Matches[1] -gt 0
+        # a run the runner stopped early (combat started) reports the steps it reached only: not a pass
+        $stopped = ($read -join "`n") -match 'observed in game: stopped'
+        if ($stopped) { "Run $n was stopped before its end (see its observations); it counts as failed" }
+        if (-not $passedSomething -or $stopped) { $failedRuns++ }
     }
-    & (Join-Path $kitTools 'Read-GameErrors.ps1') -Client $Client -Repo $root
+    # A client without BugGrabber (Anniversary, Era) has no error log to read: say so, and still close the client below
+    try { & (Join-Path $kitTools 'Read-GameErrors.ps1') -Client $Client -Repo $root }
+    catch { "Read-GameErrors.ps1 could not read the $Client client's errors: $($_.Exception.Message)" }
 }
 
 Close-Started
