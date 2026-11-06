@@ -91,6 +91,7 @@ Test through KAF. Do not deploy this repo on its own, except for the two-copy te
 ## Git and release
 
 - `main` is the only branch and the release branch. Branch from `main` and open PRs against it.
+- Gate log: enrolled. Every work folder keeps a `gates.md` with a row per gate answer; which gates ask is the kit's `skills/process-issue/gates.md`.
 - Release only with `krowi:release`, from the main checkout `Krowi_Libraries\Krowi_Options` (it is in the addon manager's `LIBRARY_NAMES`). Uploads are `--stability alpha` until Krowi says otherwise.
 - The changelog is for addon authors. `README.md` (the TOC's client badges plus `_Packaging/Description.md`) and `_Packaging/ReleaseNotes.md` are generated at release.
 - Host projects: CurseForge 1783244, Wago `aN0a7A6j`, slug `krowi-options` on both.
