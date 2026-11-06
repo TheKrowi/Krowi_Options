@@ -7,11 +7,21 @@
 
 -- The element kinds of a section's page (what an addon writes in each: RowMixins.lua's header), one entry each in
 -- lib.Kinds:
---   Build   the builder of the kind's row: a name on lib.Build (RowFrames.lua), looked up for each row
---   Height  the row's height in the list: a number, or function(window, element) for a row as tall as its content
+--   Build         the builder of the kind's row: a name on lib.Build (RowFrames.lua), looked up for each row
+--   Height        the row's height in the list: a number, or function(window, element) for a row as tall as its content
+--   Expand        function(element, list): a kind drawn as several rows (cards, a grid, a tab list) adds them to list
+--   Hidden        function(element): true leaves the element out of the page and the search
+--   Names         function(element): the texts the search finds the row by (strings; anything else is skipped), as the
+--                 game's search tags a setting (Blizzard_SettingControls.lua); a kind without Names is not searched
+--   Descriptions  function(element): the texts the broad search finds it by too
+--   Search        where a row stands for the search (Search.lua): Heading (1 for a heading that also ends the indents and
+--                 the grid above it, 2 for one that does not), Indented (it hangs under its option's parent or the row
+--                 above it with a smaller indent), BringsMembers (found, it brings its member options), Columns (a grid's
+--                 column titles) and UnderColumns (a grid row, which hangs under the titles above it)
 -- Only this file writes lib.Kinds, and each entry whole, so the newest copy of this file decides every kind and no entry
--- mixes two copies. A newer copy that adds a kind raises this file, RowFrames.lua and RowMixins.lua together. The lists'
--- pooling (lib.InitList) is here too: it needs the kinds, not the window.
+-- mixes two copies. A newer copy that adds a kind raises this file, RowFrames.lua and RowMixins.lua together. What the
+-- kinds make of a section's elements (lib.Flatten) and the lists' pooling (lib.InitList) are here too: they need the
+-- kinds, not the window.
 
 -- A standalone install loaded before any Krowi addon has no KROWI_LIBMAN and nothing to serve (Krowi_Options.lua)
 if not KROWI_LIBMAN then return end
@@ -23,34 +33,111 @@ lib.Kinds = lib.Kinds or {}
 local kinds = lib.Kinds
 
 -- [[ Headings and text ]] --
-kinds.Header = { Build = "HeaderRow", Height = 34 }
-kinds.SubHeading = { Build = "SubHeadingRow", Height = 26 }
+kinds.Header = { Build = "HeaderRow", Height = 34, Search = { Heading = 1 } }
+kinds.SubHeading = { Build = "SubHeadingRow", Height = 26, Search = { Heading = 2 } }
 -- As tall as its text, wrapped to the page's width
 kinds.Note = { Build = "NoteRow", Height = function(window, element)
     return window:MeasureText(element.Text, "GameFontDisable", window:PageWidth() - 32) + 8
 end }
 
--- [[ An option, a family heading or a group's All / None ]] --
-kinds.Option = { Build = "OptionRow", Height = 30 }
-kinds.Sub = { Build = "SubRow", Height = 28 }
+-- [[ An option ]] --
+kinds.Option = {
+    Build = "OptionRow",
+    Height = 30,
+    Hidden = function(element) return element.Option:IsHidden() end,
+    -- Its name, and its check box's button text or slider name
+    Names = function(element)
+        local with = element.With
+        local withName = with and not with:IsHidden() and (with.Type == "execute" and with:GetButtonText() or with:GetLabel()) or nil
+        return element.Option:GetLabel(), withName
+    end,
+    Descriptions = function(element)
+        local option, with = element.Option, element.With
+        local withDescription = with and not with:IsHidden() and with.GetDescription and with:GetDescription() or nil
+        return option.GetDescription and option:GetDescription(), withDescription
+    end,
+    Search = { Indented = true },
+}
 
--- [[ A grid's column titles and its rows ]] --
-kinds.GridHeader = { Build = "GridHeaderRow", Height = 34 }
-kinds.GridRow = { Build = "GridRow", Height = 28 }
+-- [[ A family heading or a group's All / None ]] --
+kinds.Sub = {
+    Build = "SubRow",
+    Height = 28,
+    Names = function(element) return element.Text end,
+    Search = { Indented = true, BringsMembers = true },
+}
 
--- [[ A tab list's row ]] --
-kinds.TabRow = { Build = "TabRow", Height = 28 }
+-- [[ A grid: its column titles, then a row of check boxes per line ]] --
+kinds.Grid = { Expand = function(element, list)
+    list[#list + 1] = { Kind = "GridHeader", Columns = element.Columns }
+    for _, row in ipairs(element.Rows) do
+        list[#list + 1] = { Kind = "GridRow", Label = row.Label, Cells = row.Cells }
+    end
+end }
+kinds.GridHeader = { Build = "GridHeaderRow", Height = 34, Search = { Columns = true } }
+kinds.GridRow = {
+    Build = "GridRow",
+    Height = 28,
+    Names = function(element) return element.Label end,
+    Search = { UnderColumns = true },
+}
+
+-- [[ A tab list: a row per tab ]] --
+kinds.TabList = { Expand = function(element, list)
+    for _, item in ipairs(element.Items) do
+        list[#list + 1] = { Kind = "TabRow", Item = item }
+    end
+end }
+kinds.TabRow = {
+    Build = "TabRow",
+    Height = 28,
+    Names = function(element)
+        local show = element.Item.Show
+        return show and show:GetLabel()
+    end,
+}
 
 -- [[ A link ]] --
 kinds.Link = { Build = "LinkRow", Height = 26 }
 
--- [[ A row of cards: as tall as its tallest card (RowMixins.lua) ]] --
+-- [[ Cards: three to a row (lib.CardColumns, RowMixins.lua), each row as tall as its tallest card ]] --
+kinds.Cards = { Expand = function(element, list)
+    local cards, columns = element.Cards, lib.CardColumns
+    for first = 1, #cards, columns do
+        local row, names = { Kind = "CardRow", Cards = {} }, {}
+        for i = first, math.min(first + columns - 1, #cards) do
+            row.Cards[#row.Cards + 1] = cards[i]
+            names[#names + 1] = cards[i].Name or ""
+        end
+        row.Key = table.concat(names, ",")
+        list[#list + 1] = row
+    end
+end }
 kinds.CardRow = { Build = "CardRow", Height = function(window, element)
     return lib.CardRowHeight(window, element)
 end }
 
 -- [[ A section's name in the search results ]] --
 kinds.SearchHeading = { Build = "SearchHeadingRow", Height = 45 }
+
+-- [[ A section's rows ]] --
+-- A section's elements as rows: a kind that expands as several rows, a hidden element left out. known: the kinds the
+-- page draws (lib.Kinds), nil keeps every kind (the search's rows). A section without elements (GetElements gives nil)
+-- has no rows.
+function lib.Flatten(elements, known)
+    local list = {}
+    for _, element in ipairs(elements or {}) do
+        local kind = lib.Kinds[element.Kind]
+        if kind and kind.Expand then
+            kind.Expand(element, list)
+        elseif kind and kind.Hidden then
+            if not kind.Hidden(element) then list[#list + 1] = element end
+        elseif not known or known[element.Kind] then
+            list[#list + 1] = element
+        end
+    end
+    return list
+end
 
 -- [[ The lists ]] --
 -- An element's height in its list: its kind's number, or what its kind's function measures

@@ -679,8 +679,8 @@ function WindowMixin:RefreshNav()
     self.NavScrollBox:SetDataProvider(CreateDataProvider(list), ScrollBoxConstants.RetainScrollPosition)
 end
 
--- A section's rows as drawn (Search.lua): grids, tab lists and cards as several rows, hidden options left out, and only
--- the kinds the page draws (lib.Kinds, Kinds.lua)
+-- A section's rows as drawn (lib.Flatten, Kinds.lua): grids, tab lists and cards as several rows, hidden options left
+-- out, and only the kinds the page draws
 local function Flatten(elements)
     return lib.Flatten(elements, lib.Kinds)
 end

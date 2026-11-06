@@ -24,40 +24,6 @@ local function Protected(func, ...)
     return xpcall(function() return func(unpack(args, 1, count)) end, CallErrorHandler)
 end
 
--- Grids, tab lists and cards draw as several rows; hidden options are left out. known: the kinds the window draws, nil
--- keeps every kind. A section without elements (GetElements gives nil) has no rows.
-function lib.Flatten(elements, known)
-    local list = {}
-    for _, element in ipairs(elements or {}) do
-        if element.Kind == "Cards" then
-            local cards, columns = element.Cards, lib.CardColumns
-            for first = 1, #cards, columns do
-                local row, names = { Kind = "CardRow", Cards = {} }, {}
-                for i = first, math.min(first + columns - 1, #cards) do
-                    row.Cards[#row.Cards + 1] = cards[i]
-                    names[#names + 1] = cards[i].Name or ""
-                end
-                row.Key = table.concat(names, ",")
-                list[#list + 1] = row
-            end
-        elseif element.Kind == "Grid" then
-            list[#list + 1] = { Kind = "GridHeader", Columns = element.Columns }
-            for _, row in ipairs(element.Rows) do
-                list[#list + 1] = { Kind = "GridRow", Label = row.Label, Cells = row.Cells }
-            end
-        elseif element.Kind == "TabList" then
-            for _, item in ipairs(element.Items) do
-                list[#list + 1] = { Kind = "TabRow", Item = item }
-            end
-        elseif element.Kind == "Option" then
-            if not element.Option:IsHidden() then list[#list + 1] = element end
-        elseif not known or known[element.Kind] then
-            list[#list + 1] = element
-        end
-    end
-    return list
-end
-
 -- The text a player reads, in capitals: icons and colour codes left out, so a search for "clock" or a colour's hex
 -- digits finds nothing it does not show
 local function Plain(text)
@@ -73,29 +39,25 @@ local function Texts(...)
     return texts
 end
 
--- A row's names, as the game's search tags (Blizzard_SettingControls.lua): an option's, and its check box's button text
--- or slider name; a family heading's, a grid row's and a tab's
+-- A row's names, as the game's search tags (Blizzard_SettingControls.lua), and its descriptions, as its kind gives them
+-- (Kinds.lua): an option's, and its check box's button text or slider name; a family heading's, a grid row's and a
+-- tab's. A kind without names is not searched.
 local function Names(element)
-    local kind = element.Kind
-    if kind == "Option" then
-        local with = element.With
-        local withName = with and not with:IsHidden() and (with.Type == "execute" and with:GetButtonText() or with:GetLabel()) or nil
-        return Texts(element.Option:GetLabel(), withName)
-    elseif kind == "Sub" then
-        return Texts(element.Text)
-    elseif kind == "GridRow" then
-        return Texts(element.Label)
-    elseif kind == "TabRow" then
-        local show = element.Item.Show
-        return Texts(show and show:GetLabel())
-    end
+    local kind = lib.Kinds[element.Kind]
+    if kind and kind.Names then return Texts(kind.Names(element)) end
 end
 
 local function Descriptions(element)
-    if element.Kind ~= "Option" then return {} end
-    local option, with = element.Option, element.With
-    local withDescription = with and not with:IsHidden() and with.GetDescription and with:GetDescription() or nil
-    return Texts(option.GetDescription and option:GetDescription(), withDescription)
+    local kind = lib.Kinds[element.Kind]
+    if kind and kind.Descriptions then return Texts(kind.Descriptions(element)) end
+    return {}
+end
+
+-- Where a row stands for the search, as its kind says (Kinds.lua, Search): a heading, a row that hangs under another
+local none = {}
+local function SearchFields(element)
+    local kind = lib.Kinds[element.Kind]
+    return kind and kind.Search or none
 end
 
 -- How texts match the words (words[1] the whole text, the rest each of its words): how many of the words they hold
@@ -150,14 +112,14 @@ local function SearchSection(tab, id, words, broad)
     local headingAt, groupAt, parentAt, rootAt = {}, {}, {}, {}
     local rowOf, subOf, atIndent, gridHeader = {}, {}, {}, nil -- an option's row, a member's All / None heading
     for i, element in ipairs(elements) do
-        local kind = element.Kind
-        if kind == "Header" or kind == "SubHeading" then
+        local search = SearchFields(element)
+        if search.Heading then
             heading, headingIndex = element.Text or "", i
-            if kind == "Header" then atIndent, gridHeader = {}, nil end
+            if search.Heading == 1 then atIndent, gridHeader = {}, nil end
         end
         headingAt[i], groupAt[i] = heading, headingIndex
         local parent
-        if kind == "Option" or kind == "Sub" then
+        if search.Indented then
             local option = element.Option
             local indent = option and option.Indent or 0
             if option then
@@ -178,9 +140,9 @@ local function SearchSection(tab, id, words, broad)
                 if level >= indent then atIndent[level] = nil end
             end
             atIndent[indent] = i
-        elseif kind == "GridHeader" then
+        elseif search.Columns then
             gridHeader = i
-        elseif kind == "GridRow" then
+        elseif search.UnderColumns then
             parent = gridHeader
         end
         parentAt[i] = parent
@@ -210,7 +172,7 @@ local function SearchSection(tab, id, words, broad)
             if not count and broad then count, longest = MatchAll(Descriptions(element), words) end
             if count then
                 local block = Take(i, Score(inName, count, longest))
-                if element.Kind == "Sub" then
+                if SearchFields(element).BringsMembers then
                     for _, member in ipairs(element.Members or {}) do
                         local row = rowOf[member]
                         if row then block.Rows[row] = true end
