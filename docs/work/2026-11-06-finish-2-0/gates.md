@@ -20,3 +20,7 @@ Class: harness
 | 2026-11-07 | look | Phase 2: does the options window look right (five screenshots, Retail and Mists, on a page: the builders' row heights are gone, nothing should differ) | looks right | first "point me to the screenshots", then "five screenshots are attached as file cards? i don;t see anything" (the cards did not reach Krowi; sent as a page instead); then "Looks right (Recommended)" | took |
 | 2026-11-07 | design | KAF reads optionsLib.L["Requires a reload"] but L is not public: how the paired KAF pull request handles it | KAF reads GetStrings().NeedsReload | "KAF reads GetStrings().NeedsReload (Recommended)" | took |
 | 2026-11-07 | merge | Phase 2: Krowi_Options #6 and Krowi_AchievementFilter #400 | merge both | "Merge" | took |
+| 2026-11-07 | design | Phase 3: an input box that loses focus without Enter (B13) | save on focus lost too | "Save on focus lost too (Recommended)" | took |
+| 2026-11-07 | design | Phase 3: a select whose saved value is no longer one of its choices (B12) | the saved value's own text, nothing saved | "The default and update the saved var. Keeping things shown that no longer exist and work makes no sence" | own |
+| 2026-11-07 | design | Phase 3: a section whose GetElements errors (B14b, B14c) | the previous section stays current, OnSectionShown not run for the broken one | "Yes, previous section stays current (Recommended)" | took |
+| 2026-11-07 | scope | Phase 3: the extra defects found by the scenarios' author and the structure move | all of them | "All of them (Recommended)" | took |
