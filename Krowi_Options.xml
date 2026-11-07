@@ -6,9 +6,14 @@
 <Ui>
     <Script file="Krowi_Options.lua"/>
     <Include file="Localization\Files.xml"/>
+    <Script file="Kinds.lua"/>
     <Script file="Search.lua"/>
     <Script file="RowMixins.lua"/>
     <Script file="RowFrames.lua"/>
     <Script file="WindowMixin.lua"/>
+    <Script file="WindowHelp.lua"/>
+    <Script file="WindowSearch.lua"/>
+    <Script file="WindowPage.lua"/>
+    <Script file="WindowLayout.lua"/>
     <Script file="WindowFrame.lua"/>
 </Ui>

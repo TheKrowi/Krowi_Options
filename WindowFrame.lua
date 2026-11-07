@@ -13,9 +13,12 @@ if not KROWI_LIBMAN then return end
 local sub, lib = KROWI_LIBMAN:NewSubmodule("WindowFrame", 0)
 if not sub then return end
 
--- RowFrames.lua's pieces, looked up on each call: a newer copy's RowFrames.lua replaces them on lib.Build even when this
--- file stays the older copy's
-local build = lib.Build
+-- What is not the public surface lives under lib.Internal (Krowi_Options.lua)
+lib.Internal = lib.Internal or {}
+
+-- RowFrames.lua's pieces, looked up on each call: a newer copy's RowFrames.lua replaces them on lib.Internal.Build even
+-- when this file stays the older copy's
+local build = lib.Internal.Build
 local function Text(...) return build.Text(...) end
 local function Color(...) return build.Color(...) end
 local function Finish(...) return build.Finish(...) end
@@ -26,7 +29,7 @@ local function Row(...) return build.Row(...) end
 -- Blizzard's list templates run code that would taint its window (docs/work/2026-10-30-options-settings-look)
 
 function build.NavButton(parent)
-    local button = Row("Button", parent, 20)
+    local button = Row("Button", parent)
     button.Texture = button:CreateTexture(nil, "BACKGROUND")
     button.Texture:SetPoint("CENTER")
     button.Texture:Hide()
@@ -39,41 +42,43 @@ function build.NavButton(parent)
     button.NewFeature:SetSize(1, 1)
     button.NewFeature:SetPoint("BOTTOMRIGHT", button.Label, "LEFT", -4, -10)
     button.NewFeature:Hide()
-    return Finish(button, lib.Mixins.NavButton, { OnClick = "OnClick", OnEnter = "OnEnter", OnLeave = "OnLeave" })
+    return Finish(button, lib.Internal.Mixins.NavButton,
+        { OnClick = "OnClick", OnEnter = "OnEnter", OnLeave = "OnLeave" })
 end
 
 function build.NavHeader(parent)
-    local header = Row("Frame", parent, 30)
+    local header = Row("Frame", parent)
     header.Background = header:CreateTexture(nil, "ARTWORK")
     header.Background:SetPoint("TOPLEFT")
     header.Label = Text(header, "OVERLAY", "GameFontHighlightMedium", "LEFT")
     header.Label:SetPoint("LEFT", 20, -1)
-    return Finish(header, lib.Mixins.NavHeader)
+    return Finish(header, lib.Internal.Mixins.NavHeader)
 end
 
 function build.NavSpacer(parent)
-    return Row("Frame", parent, 18)
+    return Row("Frame", parent)
 end
 
 -- [[ Help pane blocks ]] --
 
 function build.HelpText(parent)
-    local block = Row("Frame", parent, 20)
+    local block = Row("Frame", parent)
     block.Text = Text(block, "ARTWORK", "GameFontHighlight", "LEFT", "TOP")
     block.Text:SetPoint("TOPLEFT", 4, -2)
     block.Text:SetPoint("BOTTOMRIGHT", -4, 0)
-    return Finish(block, lib.Mixins.HelpText)
+    return Finish(block, lib.Internal.Mixins.HelpText)
 end
 
 function build.HelpPicture(parent)
-    local block = Row("Button", parent, 100)
+    local block = Row("Button", parent)
     block.Picture = block:CreateTexture(nil, "ARTWORK")
     block.Picture:SetPoint("TOPLEFT", 4, -4)
     block.Highlight = Color(block, "HIGHLIGHT", 1, 1, 1, 0.12)
     block.Highlight:SetBlendMode("ADD")
     block.Highlight:SetPoint("TOPLEFT", block.Picture)
     block.Highlight:SetPoint("BOTTOMRIGHT", block.Picture)
-    return Finish(block, lib.Mixins.HelpPicture, { OnClick = "OnClick", OnEnter = "OnEnter", OnLeave = "OnLeave" })
+    return Finish(block, lib.Internal.Mixins.HelpPicture,
+        { OnClick = "OnClick", OnEnter = "OnEnter", OnLeave = "OnLeave" })
 end
 
 -- [[ The window ]] --
@@ -85,7 +90,8 @@ local function PanelButton(parent, width, hidden)
     return button
 end
 
--- The help pane's chevrons; WindowMixin.lua sets their text and the pane's name
+-- The help pane's chevrons; WindowLayout.lua sets their arrows, WindowMixin.lua (ApplyStrings) and WindowHelp.lua
+-- (SetKicker) the pane's name beside them
 local function PaneButton(parent, width, arrowPoint, arrowY)
     local button = CreateFrame("Button", nil, parent)
     button:SetSize(width, 22)
@@ -95,12 +101,12 @@ local function PaneButton(parent, width, arrowPoint, arrowY)
 end
 
 -- The game's own Options frame (SettingsFrameTemplate: each client's border, title strip and background); Blizzard's
--- window is laid out in Blizzard_SettingsPanel.xml, which the anchors in WindowMixin.lua's Layout follow. Hidden before
--- its children are made, so the search box does not take the keyboard. Named lib.WindowName (Krowi_Options.lua).
+-- window is laid out in Blizzard_SettingsPanel.xml, which the anchors in WindowLayout.lua's Layout follow. Hidden
+-- before its children are made, so the search box does not take the keyboard. Named lib.WindowName (Krowi_Options.lua).
 function build.Window()
     local frame = CreateFrame("Frame", lib.WindowName, UIParent, "SettingsFrameTemplate")
     frame:Hide()
-    -- The width follows the help pane (WindowMixin.lua, ApplyWidth): the game's 920 plus the pane's 380
+    -- The width follows the help pane (WindowLayout.lua, ApplyWidth): the game's 920 plus the pane's 380
     frame:SetSize(1300, 720)
     frame:SetPoint("CENTER")
     frame:SetFrameStrata("HIGH")
@@ -126,7 +132,7 @@ function build.Window()
     frame.ReloadBackground:Hide()
 
     frame.Body = CreateFrame("Frame", nil, frame)
-    -- Where the game's window draws its inner frame (Blizzard_SettingsPanel.xml); WindowMixin.lua draws it in slices
+    -- Where the game's window draws its inner frame (Blizzard_SettingsPanel.xml); WindowLayout.lua draws it in slices
     frame.InnerFrame = CreateFrame("Frame", nil, frame)
     frame.InnerFrame:SetPoint("TOPLEFT", 17, -64)
     frame.InnerFrame:SetPoint("BOTTOMRIGHT", -17, 42)
@@ -145,7 +151,7 @@ function build.Window()
     -- The help pane hides behind a gold chevron and comes back from a strip reading "How it works" down its length, as in
     -- the mockup (docs/work/2026-10-25-options-revamp/mockup)
     frame.CollapseButton = PaneButton(frame, 22, "CENTER", 1)
-    -- The pane's name after the chevron; WindowMixin.lua's SetKicker widens the button's hit rect over it
+    -- The pane's name after the chevron; WindowHelp.lua's SetKicker widens the button's hit rect over it
     frame.CollapseButton.Label = Text(frame.CollapseButton, "ARTWORK", "GameFontDisableSmall", "LEFT")
     frame.CollapseButton.Label:SetPoint("LEFT", frame.CollapseButton, "RIGHT", 2, 0)
     frame.ExpandButton = PaneButton(frame, 26, "TOP", -2)
@@ -174,6 +180,6 @@ function build.Window()
     resize:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight", "ADD")
     frame.ResizeButton = resize
 
-    return Finish(frame, lib.Mixins.Window, { OnLoad = "OnLoad", OnShow = "OnShow", OnHide = "OnHide", OnEvent = "OnEvent",
-        OnSizeChanged = "OnSizeChanged", OnDragStart = "OnDragStart", OnDragStop = "OnDragStop" })
+    return Finish(frame, lib.Internal.Mixins.Window, { OnLoad = "OnLoad", OnShow = "OnShow", OnHide = "OnHide",
+        OnEvent = "OnEvent", OnSizeChanged = "OnSizeChanged", OnDragStart = "OnDragStart", OnDragStop = "OnDragStop" })
 end

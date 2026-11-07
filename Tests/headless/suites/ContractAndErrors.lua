@@ -13,6 +13,7 @@ local Read, Run, Replace, Noop, NIL = h.Read, h.Run, h.Replace, h.Noop, h.NIL
 local root, handled, libraryFiles = h.root, h.handled, h.libraryFiles
 local LoadCopy, Option, Config, Window, StandInWindows = h.LoadCopy, h.Option, h.Config, h.Window, h.StandInWindows
 local Recorder, Called, RecordFrames, PointOf, Check = h.Recorder, h.Called, h.RecordFrames, h.PointOf, h.Check
+local Internal = h.Internal -- the library's internals, lib.Internal
 -- [[ The contract (requirements 1-7) ]] --
 Check("1-7", "the headers name the whole contract", function()
     local config = Read(root .. "Krowi_Options.lua"):match("^(.-)local tab = ") or ""
@@ -36,7 +37,7 @@ Check("10", "the newest block wins at the window's first open, and every tab get
     local newer = { Window = { Point = { "CENTER", "CENTER", 0, 0 }, Changed = 200 } }
     local opening = lib.CreateWindow(Config({ TabName = "A", Saved = older }))
     lib.CreateWindow(Config({ TabName = "B", Saved = newer }))
-    lib.GetFrame(opening)
+    Internal(lib).GetFrame(opening)
     local placed = built.Point and tostring(built.Point[1]) or "nowhere"
     return placed == "CENTER" and PointOf(older.Window) == "CENTER" and older.Window.Changed == 200,
         ("placed %s; A's block %s at %s"):format(placed, PointOf(older.Window), tostring(older.Window and older.Window.Changed))
@@ -47,10 +48,10 @@ Check("11", "a change writes the whole block, stamped, into every tab, each its 
     StandInWindows(lib)
     local a = { Window = { Point = { "CENTER", "CENTER", 0, 0 }, Changed = 200 } }
     local b = {}
-    lib.GetFrame(lib.CreateWindow(Config({ TabName = "A", Saved = a })))
+    Internal(lib).GetFrame(lib.CreateWindow(Config({ TabName = "A", Saved = a })))
     lib.CreateWindow(Config({ TabName = "B", Saved = b }))
     h.now = 300
-    lib.SetShared("PaneCollapsed", true)
+    Internal(lib).SetShared("PaneCollapsed", true)
     local function Line(saved)
         local block = saved.Window
         return block and ("%s/%s/%s"):format(PointOf(block), tostring(block.PaneCollapsed), tostring(block.Changed)) or "no block"
@@ -66,8 +67,8 @@ Check("12", "a value of the wrong shape is ignored, and one window is built over
     local built = StandInWindows(lib)
     local saved = { Size = {}, Point = "bad", Window = { Size = {}, Point = "bad", Changed = 5 } }
     local tab = lib.CreateWindow(Config({ Saved = saved }))
-    local ok, message = pcall(lib.GetFrame, tab)
-    pcall(lib.GetFrame, tab)
+    local ok, message = pcall(Internal(lib).GetFrame, tab)
+    pcall(Internal(lib).GetFrame, tab)
     return ok and built.Count == 1, ("%d window(s) built over two opens%s"):format(built.Count, ok and "" or "; " .. tostring(message))
 end)
 
@@ -78,7 +79,7 @@ Check("13a", "one tab's OnCreated error leaves the other tabs' OnCreated and the
     local second = false
     local first = lib.CreateWindow(Config({ TabName = "A", OnCreated = function() error("A's own error") end }))
     lib.CreateWindow(Config({ TabName = "B", OnCreated = function() second = true end }))
-    local ok, message = pcall(lib.GetFrame, first)
+    local ok, message = pcall(Internal(lib).GetFrame, first)
     local strip = (built.Strip or 0) > 0
     return ok and second and strip and #handled == 1, ("B's OnCreated %s, tab strip %s, %d error(s) to the handler%s"):format(
         second and "ran" or "skipped", strip and "drawn" or "not drawn", #handled, ok and "" or "; raised: " .. tostring(message))
@@ -87,10 +88,10 @@ end)
 Check("13b", "a tab registered late whose OnCreated errors is still returned and registered once", function()
     local lib = LoadCopy()
     StandInWindows(lib)
-    lib.GetFrame(lib.CreateWindow(Config({ TabName = "A" })))
+    Internal(lib).GetFrame(lib.CreateWindow(Config({ TabName = "A" })))
     local ok, tab = pcall(lib.CreateWindow, Config({ TabName = "Late", OnCreated = function() error("Late's own error") end }))
     local count = 0
-    for _, registered in ipairs(lib.Tabs) do
+    for _, registered in ipairs(Internal(lib).Tabs) do
         if registered.Config.TabName == "Late" then count = count + 1 end
     end
     return ok and type(tab) == "table" and count == 1 and #handled == 1, ("%s, registered %d time(s), %d error(s) to the handler"):format(
@@ -104,14 +105,14 @@ Check("13c", "an OnCreated that registers another tab calls that tab's OnCreated
     local first = lib.CreateWindow(Config({ TabName = "A", OnCreated = function()
         lib.CreateWindow(Config({ TabName = "Zz", OnCreated = function() calls = calls + 1 end }))
     end }))
-    lib.GetFrame(first)
+    Internal(lib).GetFrame(first)
     return calls == 1, ("called %d time(s)"):format(calls)
 end)
 
 Check("14", "a tab-list row without Show hides its check box", function()
     local lib = LoadCopy()
     RecordFrames()
-    local row = lib.Build.TabRow(Recorder())
+    local row = Internal(lib).Build.TabRow(Recorder())
     local window = Window(lib)
     row:Init({ Kind = "TabRow", Item = { Position = 1 } }, window)
     local hidden = Called(row.ShowCheck, "SetShown", false) or Called(row.ShowCheck, "Hide", nil)
@@ -121,7 +122,7 @@ end)
 Check("15", "a row reused in the middle of a key capture never refreshes the option it showed before", function()
     local lib = LoadCopy()
     RecordFrames()
-    local row = lib.Build.OptionRow(Recorder())
+    local row = Internal(lib).Build.OptionRow(Recorder())
     local window = Window(lib, { InCombat = function() return false end })
     local oldAsked = 0
     local old = Option("Old", { Type = "key", Slots = {}, IsDisabled = function() oldAsked = oldAsked + 1 return false end })
@@ -134,7 +135,7 @@ local function SectionWindow(lib, config)
     return Window(lib, {
         Saved = {}, Config = config, SectionId = "first",
         EndFill = function(window) window.Filled = true end,
-        ShowSectionHelp = lib.Mixins.Window.ShowSectionHelp,
+        ShowSectionHelp = Internal(lib).Mixins.Window.ShowSectionHelp,
     })
 end
 
@@ -187,7 +188,7 @@ Check("16f", "a search leaves out a section that errors and still finds the othe
         if id == "broken" then error("the broken section's own error") end
         return { { Kind = "Option", Option = Option("Findable") } }
     end }))
-    local ok, result = pcall(lib.Search, "findable", true, nil, false)
+    local ok, result = pcall(Internal(lib).Search, "findable", true, nil, false)
     local found = ok and result[1] and #result[1].Sections or 0
     return ok and found == 1 and #handled >= 1, ("%s, %d section(s) found, %d error(s) to the handler"):format(
         ok and "searched" or ("raised: " .. tostring(result)), found, #handled)
@@ -209,7 +210,7 @@ Check("12b", "a saved anchor that is no anchor point is ignored, and every tab's
     local created = false
     local tab = lib.CreateWindow(Config({ Saved = { Window = { Point = { "FOO", "BAR", 1, 2 }, Changed = 5 } },
         OnCreated = function() created = true end }))
-    local ok, message = pcall(lib.GetFrame, tab)
+    local ok, message = pcall(Internal(lib).GetFrame, tab)
     local placed = built.Point and tostring(built.Point[1]) or "nowhere"
     return ok and placed == "nowhere" and created, ("placed %s, OnCreated %s%s"):format(placed, created and "ran" or "skipped",
         ok and "" or "; raised: " .. tostring(message))
@@ -221,8 +222,8 @@ Check("13d", "another tab whose Saved errors leaves the window, its opening and 
     local good = {}
     local opening = lib.CreateWindow(Config({ TabName = "A", Saved = good }))
     lib.CreateWindow(Config({ TabName = "B", Saved = function() error("B's own Saved error") end }))
-    local opened, message = pcall(lib.GetFrame, opening)
-    local changed, changeMessage = pcall(lib.SetShared, "PaneCollapsed", true)
+    local opened, message = pcall(Internal(lib).GetFrame, opening)
+    local changed, changeMessage = pcall(Internal(lib).SetShared, "PaneCollapsed", true)
     local written = type(good.Window) == "table" and good.Window.PaneCollapsed == true
     return opened and changed and written and #handled >= 1, ("open %s, change %s, A's block %s, %d error(s) to the handler"):format(
         opened and "fine" or ("raised: " .. tostring(message)), changed and "fine" or ("raised: " .. tostring(changeMessage)),
@@ -232,7 +233,7 @@ end)
 Check("13e", "a tab registered late whose Saved errors is still returned, with its OnCreated run", function()
     local lib = LoadCopy()
     StandInWindows(lib)
-    lib.GetFrame(lib.CreateWindow(Config({ TabName = "A" })))
+    Internal(lib).GetFrame(lib.CreateWindow(Config({ TabName = "A" })))
     local created = false
     local ok, tab = pcall(lib.CreateWindow, Config({ TabName = "Late", Saved = function() error("Late's own Saved error") end,
         OnCreated = function() created = true end }))
@@ -264,10 +265,10 @@ Check("16g", "a section opens and ends its fill when SectionName, IsNew or Chang
     }) do
         for key in pairs(handled) do handled[key] = nil end
         local fields = Footer()
-        fields.RefreshNav, fields.RefreshFooter = lib.Mixins.Window.RefreshNav, lib.Mixins.Window.RefreshFooter
+        fields.RefreshNav, fields.RefreshFooter = Internal(lib).Mixins.Window.RefreshNav, Internal(lib).Mixins.Window.RefreshFooter
         fields.Saved, fields.Config, fields.SectionId = {}, Config(case[2]), "first"
         fields.EndFill = function(window) window.Filled = true end
-        fields.ShowSectionHelp = lib.Mixins.Window.ShowSectionHelp
+        fields.ShowSectionHelp = Internal(lib).Mixins.Window.ShowSectionHelp
         local window = Window(lib, fields)
         local ok, message = pcall(window.ShowSection, window, "first")
         local clean = ok and window.Filled == true
@@ -295,7 +296,7 @@ local function ShowMeWindow(lib, help)
         Help = help, PaneCollapsed = false, InCombat = function() return false end,
         ShowMeButton = { SetShown = Noop, SetEnabled = Noop },
         ShowMeNote = { ClearAllPoints = Noop, SetPoint = Noop, SetShown = Noop, SetText = function(_, text) note.Text = text end },
-        HelpBackground = {}, UpdateShowMe = lib.Mixins.Window.UpdateShowMe, ReleaseShowMe = lib.Mixins.Window.ReleaseShowMe,
+        HelpBackground = {}, UpdateShowMe = Internal(lib).Mixins.Window.UpdateShowMe, ReleaseShowMe = Internal(lib).Mixins.Window.ReleaseShowMe,
     }), note
 end
 
@@ -323,8 +324,8 @@ Check("13f", "another tab whose Saved errors is reported once, not on every chan
     StandInWindows(lib)
     local opening = lib.CreateWindow(Config({ TabName = "A" }))
     lib.CreateWindow(Config({ TabName = "B", Saved = function() error("B's own Saved error") end }))
-    lib.GetFrame(opening)
-    for i = 1, 3 do lib.SetShared("PaneCollapsed", i % 2 == 0) end
+    Internal(lib).GetFrame(opening)
+    for i = 1, 3 do Internal(lib).SetShared("PaneCollapsed", i % 2 == 0) end
     return #handled == 1, ("%d error(s) to the handler over the open and three changes"):format(#handled)
 end)
 

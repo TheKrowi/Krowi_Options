@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - Registers as `Krowi_Options_2` (was `Krowi_Options_1`), since the points below change the API
 - The window's texts are the library's own, translated in the game's languages on its CurseForge project; a tab's config no longer takes `Strings`
-- Two addons can embed different versions: the frames are built in Lua instead of XML templates, the mixins are on `lib.Mixins` instead of globals, and every file carries its own version, so the newest copy of each file is the one in use
+- Two addons can embed different versions: the frames are built in Lua instead of XML templates, the mixins are on the library (`lib.Internal.Mixins`) instead of globals, and every file carries its own version, so the newest copy of each file is the one in use
 - Search descriptions shows on every tab
 - The window's frame is named `Krowi_Options_2_Window` (was `Krowi_OptionsWindow`), also as `lib.WindowName`
 - `CreateWindow` refuses a config with a missing or wrong field, and the error names it

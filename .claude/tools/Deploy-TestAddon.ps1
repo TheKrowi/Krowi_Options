@@ -22,6 +22,13 @@
     the one under test: the run notes it (Runner.lua); for a clean run turn that addon off on the test character, or raise
     the minors.
 
+.PARAMETER Consumers
+    Also deploys this checkout's library into the Libs\Krowi_Options of every other addon installed in the client that
+    embeds one (Krowi_AchievementFilter, Krowi_ExtendedVendorUI, ...), so that every copy of the library the client loads
+    is this checkout's and a run tests this checkout whatever the load order is. Without it, a consumer that loads first
+    (they all do) wins at equal minors with its own, older copy. The consumer's own deploy (the kit's Deploy.ps1 from its
+    checkout) puts its copy back afterwards.
+
 .PARAMETER Client
     Retail (default), Ptr, Xptr, Beta, Classic (Mists), ClassicPtr, Era, EraPtr, Anniversary or Forever.
 
@@ -35,6 +42,7 @@
 [CmdletBinding()]
 param(
     [ValidateSet('Retail', 'Ptr', 'Xptr', 'Beta', 'Classic', 'ClassicPtr', 'Era', 'EraPtr', 'Anniversary', 'Forever')][string]$Client = 'Retail',
+    [switch]$Consumers,
     [switch]$WhatIf
 )
 
@@ -138,6 +146,26 @@ foreach ($library in @([ordered]@{ Name = 'Krowi_Options'; Repo = $root }, [orde
         continue
     }
     & $deploy -Client $Client -Repo $library.Repo -Destination $libraryDestination -WhatIf:$WhatIf
+}
+
+# --- 4. The same library into the other addons that embed one (-Consumers) --------------------------------------
+if ($Consumers) {
+    # Only an addon that embeds this library (Krowi_Options_2): a copy of 1.x (Krowi_Options_1) is left alone
+    $others = @(Get-ChildItem -LiteralPath $addOns -Directory | Where-Object {
+        $core = Join-Path $_.FullName 'Libs\Krowi_Options\Krowi_Options.lua'
+        $_.Name -ne 'Krowi_OptionsTests' -and (Test-Path -LiteralPath $core) -and
+            ([IO.File]::ReadAllText($core) -match "NewLibrary\('Krowi_Options_2'") })
+    ""
+    foreach ($skipped in Get-ChildItem -LiteralPath $addOns -Directory | Where-Object {
+            $_.Name -ne 'Krowi_OptionsTests' -and (Test-Path -LiteralPath (Join-Path $_.FullName 'Libs\Krowi_Options\Krowi_Options.lua')) -and $others.Name -notcontains $_.Name }) {
+        "-Consumers: $($skipped.Name) embeds a Krowi_Options that is not 2.x: left alone"
+    }
+    if ($others.Count -eq 0) { "-Consumers: no other addon in the $Client client embeds the library." }
+    foreach ($other in $others) {
+        "-Consumers: $($other.Name)"
+        & $deploy -Client $Client -Repo $root -Destination (Join-Path $other.FullName 'Libs\Krowi_Options') -WhatIf:$WhatIf
+    }
+    if ($others.Count -gt 0 -and -not $WhatIf) { "  Their own deploy (Deploy.ps1 from each addon's checkout) puts their copies back." }
 }
 
 # A standalone Krowi_Options folder (a two-copy test's, left behind) loads as a copy of its own
