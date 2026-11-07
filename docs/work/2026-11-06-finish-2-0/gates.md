@@ -32,4 +32,6 @@ Class: harness
 | 2026-11-07 | design | Phase 4: a config that gives ResetSection or ChangedCount but not both | refuse one without the other | "Refuse one without the other (Recommended)" | took |
 | 2026-11-07 | merge | Phase 4: Krowi_Options #8 (with the pair rule applied first, rechecked in game on Retail and Mists) | merge | "Merge (Recommended)" | took |
 | 2026-11-07 | plan | Phase 5: the plan (probe Forever, Era, Anniversary; fix findings; the four game-only items; KAF's suites; the two-copy gate with a kit pull request) | approve | plan approved at ExitPlanMode with no changes | took |
+| 2026-11-07 | merge | Phase 5, library side: Krowi_Options #9 (the test addon proven on every client, the game-only items answered; the two-copy gate follows in the kit) | merge | "Merge (Recommended)" | took |
+| 2026-11-07 | design | Phase 5: how big the two-copy gate step is | fix the entry, then extend | "Fix the entry, then extend (Recommended)" | took |
 | 2026-11-07 | intent | Phase 5: in game on every client (Forever, Era, Anniversary, then the four game-only items, KAF's suites, the two-copy gate with its entry updated and extended by the library's test addon as a kit pull request, BugGrabber clean) | accept | "Accept the intent (Recommended)" | took |
