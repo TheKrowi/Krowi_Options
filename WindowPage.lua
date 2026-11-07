@@ -237,10 +237,20 @@ function WindowMixin:ReloadSection()
 end
 
 -- A row whose option errors stops only itself: the error goes to the game's error handler with its stack, and the other
--- rows, the changed count and the reload bar still refresh
+-- rows, the changed count and the reload bar still refresh. Called through one function made once rather than
+-- Protected, whose closure and argument list a refresh would make for every row.
+local refreshing -- the row RefreshRow refreshes
+local function RefreshRefreshing()
+    refreshing:Refresh()
+end
+
 local function RefreshRow(frame)
     local row = frame.Row
-    if row and row.Refresh then Protected(row.Refresh, row) end
+    if row and row.Refresh then
+        refreshing = row
+        xpcall(RefreshRefreshing, CallErrorHandler)
+        refreshing = nil
+    end
 end
 
 function WindowMixin:Refresh()

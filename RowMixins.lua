@@ -10,8 +10,9 @@
 --   Option     { Option, With }: an option row (the interface below); With only on a toggle
 --   Sub        { Text, Members }: a family heading with All / None, which set its member options
 --   Grid       { Columns, Rows = { { Label, Cells } } }: column titles, then a row of check boxes (options) per line
---   TabList    { Items = { { Position, Show, Source, MoveUp, MoveDown } } }: a tab's place, its Show option (none: no
---              check box), where it comes from, and the functions that move it
+--   TabList    { Items = { { Position, Show, Name, Source, MoveUp, MoveDown } } }: a tab's place, its Show option (none:
+--              no check box), its name for a tab without Show (optional; the row draws Show's name), where it comes
+--              from, and the functions that move it
 --   Link       { Text, Detail, OnClick }: a line that opens something
 --   Cards      { Cards = { { Name, Text, IsNew, OnClick, Picture, Width, Height, TexCoords, Part | Icon } } }: three to a
 --              row (CardMixin below)
@@ -159,7 +160,40 @@ local function WithControl(row)
     return row.With and (row.With.Type == "range" and row.Range or row.Execute)
 end
 
+-- What an input box shows of its option's value: a string as it is, a number as text, a saved value of another type as
+-- nothing
+local function InputText(value)
+    if type(value) == "string" then return value end
+    if type(value) == "number" then return tostring(value) end
+    return ""
+end
+
+-- A change a row makes while the page's list draws it or lets it go (a select set back to a choice, text kept as its
+-- box hides): window:OnOptionChanged could rebuild the page from inside the list's own fill, so only the reload bar
+-- learns of it here, and the fill or refresh around it draws the changed lines and the count
+local function ChangedQuietly(row, option)
+    if option:GetNeedsReload() then row.Window.ReloadPending = true end
+end
+
+-- The text typed in an input box, saved as the box loses the focus, as Enter saves it (Krowi, 2026-11-07); a box whose
+-- text is its option's saves nothing. A box hidden with its row (the window closed, the page drawn again) loses the
+-- focus inside that hide.
+local function SaveInput(row, editBox)
+    local option = row.Option
+    if not option or option.Type ~= "input" then return end
+    local text = editBox:GetText()
+    if text == InputText(option:Get()) then return end
+    option:Set(text)
+    if editBox:IsVisible() then
+        row.Window:OnOptionChanged(option)
+    else
+        ChangedQuietly(row, option)
+    end
+end
+
 function OptionRowMixin:OnLoad()
+    self.Choices = {} -- the choices a select's menu was made from (KeepChoices)
+
     self.Reset:SetScript("OnClick", function()
         self.Option:Reset()
         if self.With then self.With:Reset() end
@@ -184,14 +218,27 @@ function OptionRowMixin:OnLoad()
         self.Window:OnOptionChanged(option)
     end)
 
+    -- Enter and Escape end the typing themselves, so the focus the box loses then saves nothing: Enter saved the text,
+    -- Escape put the saved one back. The flag holds until that focus lost, or until the box is focused again when Enter
+    -- or Escape came without the focus.
     self.Input:SetScript("OnEnterPressed", function(editBox)
         self.Option:Set(editBox:GetText())
+        self.InputKept = true
         editBox:ClearFocus()
         self.Window:OnOptionChanged(self.Option)
     end)
     self.Input:SetScript("OnEscapePressed", function(editBox)
-        editBox:SetText(self.Option:Get() or "")
+        editBox:SetText(InputText(self.Option:Get()))
+        self.InputKept = true
         editBox:ClearFocus()
+    end)
+    self.Input:HookScript("OnEditFocusGained", function() self.InputKept = false end)
+    self.Input:HookScript("OnEditFocusLost", function(editBox)
+        if self.InputKept then
+            self.InputKept = false
+            return
+        end
+        SaveInput(self, editBox)
     end)
 
     for slot, button in ipairs({ self.Key1, self.Key2 }) do
@@ -217,11 +264,19 @@ function OptionRowMixin:OnLoad()
     self.Select.Dropdown.ShouldShowTooltip = NoTooltip
 end
 
+-- A range option's value as its slider takes it: a number between its ends; a saved value that is no number is its min
+local function RangeValue(option, min, max)
+    return math.min(math.max(tonumber(option:Get()) or min, min), max)
+end
+
+-- The slider steps (max - min) / steps (MinimalSliderWithSteppersMixin:Init). Without a step the range is split into
+-- 100, as the game's own sliders without a rate are (Settings.CreateSliderOptions); at least one step, so a slider whose
+-- ends are the same steps 0, never 0 / 0.
 local function InitRange(row, option)
     local min, max, step = option:GetRange()
     row.Updating = true
-    local steps = step and step > 0 and math.floor((max - min) / step + 0.5) or (max - min)
-    row.Range:Init(option:Get() or min, min, max, steps, {
+    local steps = step and step > 0 and math.floor((max - min) / step + 0.5) or 100
+    row.Range:Init(RangeValue(option, min, max), min, max, math.max(steps, 1), {
         [MinimalSliderWithSteppersMixin.Label.Right] = CreateMinimalSliderFormatter(MinimalSliderWithSteppersMixin.Label.Right, function(value)
             return option.Format and option:Format(value) or tostring(math.floor(value * 100 + 0.5) / 100)
         end),
@@ -231,10 +286,70 @@ local function InitRange(row, option)
 end
 
 local function RefreshRange(row, option, disabled)
+    local min, max = option:GetRange()
     row.Updating = true
-    row.Range:SetValue(option:Get() or 0)
+    row.Range:SetValue(RangeValue(option, min, max))
     row.Updating = nil
     row.Range:SetEnabled(not disabled)
+end
+
+-- [[ A select's choices ]] --
+local function IsChoice(values, value)
+    for _, pair in ipairs(values) do
+        if pair[1] == value then return true end
+    end
+    return false
+end
+
+-- The choices a select's menu was made from, kept flat (value, text, value, text, ...) in the row's own table, so a
+-- refresh tells whether they changed without making anything
+local function SameChoices(kept, values)
+    local count = 0
+    for i, pair in ipairs(values) do
+        if kept[2 * i - 1] ~= pair[1] or kept[2 * i] ~= tostring(pair[2]) then return false end
+        count = i
+    end
+    return kept.Count == count
+end
+
+local function KeepChoices(kept, values)
+    local count = 0
+    for i, pair in ipairs(values) do
+        kept[2 * i - 1], kept[2 * i] = pair[1], tostring(pair[2])
+        count = i
+    end
+    for i = 2 * count + 1, 2 * (kept.Count or 0) do kept[i] = nil end
+    kept.Count = count
+end
+
+-- The value a select shows: its saved value, or when that is no longer one of its choices (a profile deleted elsewhere)
+-- its default, or its first choice without one, which is then saved through the option's own Set (Krowi, 2026-11-07).
+-- Once per stale value, so a Set that does not keep it cannot loop. Never set:
+-- - a select with a Placeholder or a Confirm: it shows its placeholder while nothing is chosen, and asks before a choice
+--   is made (Krowi_AchievementFilter's Copy From and Delete a Profile hold no value and have both: setting them would
+--   copy or delete a profile);
+-- - a value that is its option's default, which an addon holds on purpose (Krowi_AchievementFilter's first weekday of
+--   the calendar, -1 for the game's own until a reload, also after a profile reset).
+local function SelectShown(row, option, values)
+    local value = option:Get()
+    if values[1] == nil or IsChoice(values, value) or option.Placeholder or option.Confirm then
+        row.Repaired = false
+        return value
+    end
+    local hasDefault, default
+    if option.GetDefault then hasDefault, default = option:GetDefault() end
+    if hasDefault and value == default then
+        row.Repaired = false
+        return value
+    end
+    local shown = values[1][1]
+    if hasDefault then shown = default end
+    if not (row.Repaired == true and row.RepairedFrom == value) then
+        row.Repaired, row.RepairedFrom = true, value
+        option:Set(shown)
+        ChangedQuietly(row, option)
+    end
+    return shown
 end
 
 -- Each option type: Place, its control's place in the row's geometry (where the help says the control starts); Init,
@@ -262,26 +377,42 @@ local optionTypes = {
     },
     select = {
         Place = "Select",
-        -- The arrows step through the menu's radios, so a choice made with them asks and sets as a click in the list does
+        -- The arrows step through the menu's radios, so a choice made with them asks and sets as a click in the list does.
+        -- The menu is made from the kept choices, once per option the row shows and again only when they change: a
+        -- refresh that changes only the value has the dropdown read its radios again (DropdownButtonMixin:Update).
         Init = function(row, option, window)
             local dropdown = row.Select.Dropdown
+            local values = option:GetValues()
+            KeepChoices(row.Choices, values)
+            row.SelectShown = SelectShown(row, option, values)
             dropdown:SetupMenu(function(_, root)
-                for _, pair in ipairs(option:GetValues()) do
-                    root:CreateRadio(tostring(pair[2]), function() return option:Get() == pair[1] end, function()
+                local choices = row.Choices
+                for i = 1, choices.Count do
+                    local value = choices[2 * i - 1]
+                    root:CreateRadio(choices[2 * i], function() return row.SelectShown == value end, function()
                         local function Choose()
-                            option:Set(pair[1])
+                            option:Set(value)
                             window:OnOptionChanged(option)
                         end
                         -- option.Confirm(value) -> the question the window asks before the choice is made
-                        if option.Confirm then window:AskConfirm(option:Confirm(pair[1]), Choose) else Choose() end
+                        if option.Confirm then window:AskConfirm(option:Confirm(value), Choose) else Choose() end
                     end)
                 end
             end)
             if dropdown.SetDefaultText then dropdown:SetDefaultText(option.Placeholder or "") end
             row.Select:Show()
         end,
-        Refresh = function(row, _, disabled)
-            row.Select.Dropdown:GenerateMenu()
+        Refresh = function(row, option, disabled)
+            local values = option:GetValues()
+            local shown = SelectShown(row, option, values)
+            if not SameChoices(row.Choices, values) then
+                KeepChoices(row.Choices, values)
+                row.SelectShown = shown
+                row.Select.Dropdown:GenerateMenu()
+            elseif shown ~= row.SelectShown then
+                row.SelectShown = shown
+                row.Select.Dropdown:Update()
+            end
             row.Select:SetEnabled(not disabled) -- the arrows' frame enables its dropdown and its arrows
         end,
     },
@@ -301,7 +432,7 @@ local optionTypes = {
             row.Input:Show()
         end,
         Refresh = function(row, option, disabled)
-            if not row.Input:HasFocus() then row.Input:SetText(option:Get() or "") end
+            if not row.Input:HasFocus() then row.Input:SetText(InputText(option:Get())) end
             row.Input:SetEnabled(not disabled)
         end,
     },
@@ -332,15 +463,18 @@ local optionTypes = {
 }
 
 function OptionRowMixin:Init(element, window)
-    -- A recycled row must not bind the next key to its new option, nor refresh the option it showed before
+    -- A recycled row must not bind the next key to its new option, nor refresh the option it showed before, nor save
+    -- text typed for that one into the new one (its input box loses the focus as it hides)
     self.Option = nil
     self:EndKeyCapture()
-    self.Element, self.Window, self.Option = element, window, element.Option
-    local option = self.Option
-    self.With = element.With and not element.With:IsHidden() and element.With or nil
     for _, control in ipairs({ self.Toggle, self.Range, self.Select, self.Execute, self.Input, self.Key1, self.Key2 }) do
         control:Hide()
     end
+    self.InputKept, self.Repaired = false, false
+    self.Element, self.Window, self.Option = element, window, element.Option
+    local option = self.Option
+    -- With only on a toggle (the contract): a slider's or a button's own control always sets its own option
+    self.With = option.Type == "toggle" and element.With and not element.With:IsHidden() and element.With or nil
     local geometry = lib.Internal.RowGeometry(option.Indent)
     self.Geometry = geometry
     self.Label:ClearAllPoints()
@@ -381,6 +515,9 @@ function OptionRowMixin:Refresh()
     local disabled = option:IsDisabled()
     local strings = self.Window.Strings
     self.Label:SetFontObject(disabled and "GameFontDisable" or "GameFontNormal")
+    -- The control first: a select whose value is no longer a choice is set to one there, which the changed line shows
+    local optionType = optionTypes[option.Type]
+    if optionType then optionType.Refresh(self, option, disabled, strings) end
 
     local with = self.With
     local needsReload = option:GetNeedsReload() or with ~= nil and with:GetNeedsReload()
@@ -392,8 +529,6 @@ function OptionRowMixin:Refresh()
     self.ChangedBar:SetShown(changed)
     self.Reset:SetShown(changed and UnderMouse(self)) -- a change made under the mouse shows the arrow at once
 
-    local optionType = optionTypes[option.Type]
-    if optionType then optionType.Refresh(self, option, disabled, strings) end
     -- With greys out with the toggle, or by itself (a threshold while its check box is off)
     if with then
         local withDisabled = disabled or with:IsDisabled()
@@ -437,8 +572,11 @@ function OptionRowMixin:OnKeyCaptured(slot, key)
     if self.Capturing ~= slot or ignoredKeys[key] then return end
     self:EndKeyCapture()
     if InCombatLockdown() then return end
+    -- A key button's scripts on a row of another type (its buttons hidden there) have no slot to set
+    local slotOption = self.Option.Slots and self.Option.Slots[slot]
+    if not slotOption then return end
     local combo = key == "ESCAPE" and "" or (IsAltKeyDown() and "ALT-" or "") .. (IsControlKeyDown() and "CTRL-" or "") .. (IsShiftKeyDown() and "SHIFT-" or "") .. key
-    self.Option.Slots[slot]:Set(combo)
+    slotOption:Set(combo)
     self.Window:OnOptionChanged(self.Option)
 end
 
@@ -592,7 +730,7 @@ function TabRowMixin:Init(element, window)
     self.Element, self.Window = element, window
     local item = element.Item
     self.Position:SetText(item.Position)
-    self.Label:SetText(item.Show and item.Show:GetLabel() or "?")
+    self.Label:SetText(item.Show and item.Show:GetLabel() or item.Name or "")
     self.Source:SetText(item.Source or "")
     Place(self.Up, self, lib.Internal.RowGeometry(0).TabArrows)
     self.Up:SetEnabled(item.MoveUp ~= nil)
