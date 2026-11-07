@@ -36,5 +36,6 @@ Class: harness
 | 2026-11-07 | merge | Phase 5, library side: Krowi_Options #9 (the test addon proven on every client, the game-only items answered; the two-copy gate follows in the kit) | merge | "Merge (Recommended)" | took |
 | 2026-11-07 | merge | Phase 5: Krowi_Options #10 (the public step in /kotest) | merge | "Merge (Recommended)" | took |
 | 2026-11-07 | merge | Phase 5: Krowi_ClaudeKit #19 (the two-copy gate validates Krowi_Options with its own test addon; work item 2026-11-07-two-copy-entry in the kit) | merge | "Merge (Recommended)" | took |
+| 2026-11-07 | merge | Phase 5: Krowi_Options #11 (docs: the library validates itself, the two-copy gate runs the test addon) | merge | "Merge (Recommended)" | took |
 | 2026-11-07 | design | Phase 5: how big the two-copy gate step is | fix the entry, then extend | "Fix the entry, then extend (Recommended)" | took |
 | 2026-11-07 | intent | Phase 5: in game on every client (Forever, Era, Anniversary, then the four game-only items, KAF's suites, the two-copy gate with its entry updated and extended by the library's test addon as a kit pull request, BugGrabber clean) | accept | "Accept the intent (Recommended)" | took |
