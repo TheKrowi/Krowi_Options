@@ -173,9 +173,11 @@ function WindowMixin:ShowSearchHelp()
     self.Help = nil -- no section's help is drawn, so Show me hides
     local strings = self.Strings
     self:SetKicker(strings.HowItWorks)
-    local blocks = { TextBlock(strings.Search, "GameFontNormalLarge", 10) }
-    if strings.SearchHelp then blocks[#blocks + 1] = TextBlock(strings.SearchHelp, "GameFontHighlightSmall", 8) end
-    if strings.SearchHelpBroad and strings.SearchBroad then blocks[#blocks + 1] = TextBlock(strings.SearchHelpBroad, "GameFontHighlightSmall", 8) end
+    local blocks = {
+        TextBlock(strings.Search, "GameFontNormalLarge", 10),
+        TextBlock(strings.SearchHelp, "GameFontHighlightSmall", 8),
+        TextBlock(strings.SearchHelpBroad, "GameFontHighlightSmall", 8),
+    }
     self:FillHelp(blocks)
     self:UpdateShowMe()
 end

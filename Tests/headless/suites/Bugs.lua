@@ -344,7 +344,7 @@ Scenario("B9", "ApplyStrings runs on every tab switch, though the strings are th
         window:ShowTab(a)
         return ("ApplyStrings ran %d time(s) over two switches after the first open"):format(count)
     end,
-    Recorded = "ApplyStrings ran 2 time(s) over two switches after the first open",
+    Recorded = "ApplyStrings ran 0 time(s) over two switches after the first open",
     Target = "ApplyStrings ran 0 time(s) over two switches after the first open",
 })
 
@@ -365,7 +365,7 @@ Scenario("B10", "a window stays shown after its last tab unregisters", {
         tab:Unregister()
         return visible and "left shown" or "hidden"
     end,
-    Recorded = "left shown",
+    Recorded = "hidden",
     Target = "hidden",
 })
 
@@ -596,7 +596,7 @@ Scenario("B15a", "a tab without a saved table: tab:Open() before the window exis
         local tab = lib.CreateWindow(Config({ TabName = "Broken", Saved = function() return nil end }))
         return ErrorChunk(lib, tab, "tab:Open()")
     end,
-    Recorded = "the error points at Krowi_Options.lua",
+    Recorded = "the error points at MyAddon.lua",
     Target = "the error points at MyAddon.lua",
 })
 
@@ -607,7 +607,7 @@ Scenario("B15b", "a tab without a saved table: tab:Open() on a window already ma
         Internal(lib).Frame = Window(lib, { Show = Noop, ShowSection = Noop })
         return ErrorChunk(lib, tab, "tab:Open()")
     end,
-    Recorded = "the error points at WindowMixin.lua",
+    Recorded = "the error points at MyAddon.lua",
     Target = "the error points at MyAddon.lua",
 })
 
