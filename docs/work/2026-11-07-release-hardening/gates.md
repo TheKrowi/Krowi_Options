@@ -12,3 +12,4 @@ Class: harness
 | 2026-11-07 | design | Taint review, finding 3 (KAF's Show me map overlay stays above Blizzard's Options window) | fix it in KAF 105.0 | "Fix it in KAF 105.0 (Recommended)" | took |
 | 2026-11-07 | design | An ShowMeSecure that errors, in game (a deliberate error would fail the run's lua-errors step) | leave it to the headless ContractAndErrors 16j | not asked: dropped from the in-game step, spec requirement 2 says why | auto |
 | 2026-11-07 | design | Two checks read a second after their state was set found a row's help brought up by the resting mouse (Mists) | put that help away first, as the mouse leaving does, and name the row in the line | not asked: PutHoverAway in Steps.lua | auto |
+| 2026-11-07 | merge | PR #13 | merge | "Merge both (Recommended)" | took |
