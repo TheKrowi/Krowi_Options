@@ -27,3 +27,7 @@ Class: harness
 | 2026-11-07 | plan | Phase 3: the plan (fix list by file, three Opus hand-offs, test addon steps, proof) | approve | plan approved at ExitPlanMode with no changes | took |
 | 2026-11-07 | design | Phase 3: the stale select rule narrowed to exclude a Placeholder or Confirm, a value that is the option's own default, and nil | the narrowed rule | "Yes, the narrowed rule (Recommended)" | took |
 | 2026-11-07 | merge | Phase 3: Krowi_Options #7 | merge | "Merge (Recommended)" | took |
+| 2026-11-07 | plan | Phase 4: the plan (required and optional fields, defaults on a copy of the config, unknown-key check, test addon second tab, proof) | approve | plan approved at ExitPlanMode with no changes | took |
+| 2026-11-07 | intent | Phase 4: the config contract (five required fields, defaults for six, unknown key an error, library only, no paired KAF pull request) | accept | "Accept the intent (Recommended)" | took |
+| 2026-11-07 | design | Phase 4: a config that gives ResetSection or ChangedCount but not both | refuse one without the other | "Refuse one without the other (Recommended)" | took |
+| 2026-11-07 | merge | Phase 4: Krowi_Options #8 (with the pair rule applied first, rechecked in game on Retail and Mists) | merge | "Merge (Recommended)" | took |

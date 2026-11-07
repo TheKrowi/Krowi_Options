@@ -738,8 +738,8 @@ Scenario("B15c", "a tab without a saved table: the addon's own tab:GetSaved() er
 })
 
 -- [[ B16: the config contract (phase 4): five required fields, defaults for the other six, unknown keys refused ]] --
--- A config without the field: refused today; once accepted, the window's real code uses the field the tab ended up
--- with (tab.Config, wherever the default is put) and must not reach the error handler
+-- A config without the field: refused before phase 4; accepted since, the window's real code uses the field the tab
+-- ended up with (tab.Config, the window's copy with the default filled in) and must not reach the error handler
 local optional = {
     { "B16a", "IsNew", "no section marked New", function(lib, tab)
         local list
@@ -752,7 +752,7 @@ local optional = {
     end },
     { "B16b", "Landing", "opens on the overview", function(lib, tab)
         local opened
-        local window = Window(lib, { Show = Noop, ShowSection = function(_, id) opened = id end })
+        local window = Window(lib, { Show = Noop, ApplyStrings = Noop, ShowSection = function(_, id) opened = id end })
         window:ShowTab(tab)
         return "opens on the " .. tostring(opened)
     end },
@@ -786,13 +786,16 @@ for _, case in ipairs(optional) do
     Scenario(id, ("a config without %s is refused"):format(field), {
         Observe = function()
             local lib = LoadCopy()
-            local ok, tab = pcall(lib.CreateWindow, Config({ [field] = NIL }))
+            -- ResetSection and ChangedCount come as a pair (B30): each is left out together with the other
+            local left = { [field] = NIL }
+            if field == "ResetSection" then left.ChangedCount = NIL elseif field == "ChangedCount" then left.ResetSection = NIL end
+            local ok, tab = pcall(lib.CreateWindow, Config(left))
             if not ok then return "refused: " .. tostring(tab) end
             local used, result = pcall(use, lib, tab)
             if not used then return "accepted, then raised: " .. tostring(result) end
             return ("accepted: %s, %d error(s) to the handler"):format(result, #handled)
         end,
-        Recorded = ('refused: Krowi_Options: tab "Test": config.%s must be a function, not nil'):format(field),
+        Recorded = ("accepted: %s, 0 error(s) to the handler"):format(target),
         Target = ("accepted: %s, 0 error(s) to the handler"):format(target),
     })
 end
@@ -805,7 +808,7 @@ Scenario("B16g", "a config with a misspelled key (OnSectionShow) is accepted sil
         if text and text:find('"Test"', 1, true) and text:find("OnSectionShow", 1, true) then return "an error naming the tab and the key" end
         return ok and "accepted silently" or ("refused: " .. tostring(message))
     end,
-    Recorded = "accepted silently",
+    Recorded = "an error naming the tab and the key",
     Target = "an error naming the tab and the key",
 })
 
@@ -989,4 +992,107 @@ Scenario("B24", "a hidden key button fired on a toggle's row errors on Slots", {
     end,
     Recorded = "no error",
     Target = "no error",
+})
+
+-- [[ B25 to B29: the config contract (phase 4), beside B16 ]] --
+-- The five fields a config must have; Config() gives them with the other six
+local required = { "TabName", "Saved", "Groups", "SectionName", "GetElements" }
+
+-- Through the window's real code: the tab opens where Landing says, a section shows (OnSectionShown, IsNew in the
+-- navigation, ChangedCount in the header, GetHelp in the pane) and Defaults asks and is answered Yes (ResetSection)
+Scenario("B25", "a config of only the five required fields is refused", {
+    Observe = function()
+        local lib = LoadCopy()
+        local full, config = Config(), {}
+        for _, key in ipairs(required) do config[key] = full[key] end
+        local ok, tab = pcall(lib.CreateWindow, config)
+        if not ok then return "refused: " .. tostring(tab) end
+        local mixin, shown, nav = Internal(lib).Mixins.Window, {}, nil
+        local fields = Footer(lib, shown)
+        fields.Show, fields.ApplyStrings, fields.RefreshNav, fields.ShowSectionHelp = Noop, Noop, mixin.RefreshNav, mixin.ShowSectionHelp
+        fields.NavScrollBox = { SetDataProvider = function(_, list) nav = list end }
+        local window = Window(lib, fields)
+        window:ShowTab(tab)
+        local landed = window.SectionId
+        window:ShowSection("first")
+        local new = 0
+        for _, element in ipairs(nav or {}) do if element.IsNew then new = new + 1 end end
+        local enabled, help = shown.DefaultsEnabled, window.Help
+        window:OnDefaultsClick()
+        window:OnDefaultsClick() -- Yes
+        return ("opens on the %s; %s: %d marked New, Defaults %s, %s; after Defaults the reload bar %s; %d error(s) to the handler"):format(
+            tostring(landed), tostring(window.SectionId), new, enabled and "enabled" or "greyed out", help and "help" or "no help",
+            window.ReloadPending and "lit" or "not lit", #handled)
+    end,
+    Recorded = "opens on the overview; first: 0 marked New, Defaults greyed out, no help; after Defaults the reload bar not lit; 0 error(s) to the handler",
+    Target = "opens on the overview; first: 0 marked New, Defaults greyed out, no help; after Defaults the reload bar not lit; 0 error(s) to the handler",
+})
+
+Scenario("B26", "a config whose IsNew is a string is refused, naming the tab and the field", {
+    Observe = function()
+        local lib = LoadCopy()
+        local ok, message = pcall(lib.CreateWindow, Config({ IsNew = "x" }))
+        return ok and "accepted" or ("refused: " .. tostring(message))
+    end,
+    Recorded = 'refused: Krowi_Options: tab "Test": config.IsNew must be a function or nil, not string',
+    Target = 'refused: Krowi_Options: tab "Test": config.IsNew must be a function or nil, not string',
+})
+
+Scenario("B27", "a config with two keys the window does not know is accepted silently", {
+    Observe = function()
+        local lib = LoadCopy()
+        local ok, message = pcall(lib.CreateWindow, Config({ Colour = "red", OnSectionShow = Noop }))
+        local registered = (", %d tab(s) registered"):format(#Internal(lib).Tabs)
+        if ok then return "accepted silently" .. registered end
+        local text = tostring(message)
+        local named = text:find('"Test"', 1, true) and (text:find("config.Colour ", 1, true) or text:find("config.OnSectionShow ", 1, true))
+        return (named and "refused, naming the tab and one of the keys" or ("refused: " .. text)) .. registered
+    end,
+    Recorded = "refused, naming the tab and one of the keys, 0 tab(s) registered",
+    Target = "refused, naming the tab and one of the keys, 0 tab(s) registered",
+})
+
+-- Krowi_Options 1 took the window's texts per tab; 2.0's are the library's own (lib.GetStrings)
+Scenario("B28", "a config with 1.0's Strings key is accepted silently", {
+    Observe = function()
+        local lib = LoadCopy()
+        local ok, message = pcall(lib.CreateWindow, Config({ Strings = { Overview = "Overview" } }))
+        return ok and "accepted silently" or ("refused: " .. tostring(message))
+    end,
+    Recorded = 'refused: Krowi_Options: tab "Test": config.Strings is not a key the window knows',
+    Target = 'refused: Krowi_Options: tab "Test": config.Strings is not a key the window knows',
+})
+
+-- The window keeps its own copy with the defaults filled in, so an addon that reads its config back sees what it gave
+Scenario("B29", "a config without IsNew: the addon's own table stays as the addon gave it", {
+    Observe = function()
+        local lib = LoadCopy()
+        local config = Config({ IsNew = NIL })
+        local before = 0
+        for _ in next, config do before = before + 1 end
+        local ok, tab = pcall(lib.CreateWindow, config)
+        if not ok then return "refused: " .. tostring(tab) end
+        local after = 0
+        for _ in next, config do after = after + 1 end
+        return ("the addon's table: %d key(s) before, %d after, IsNew %s; the tab's IsNew a %s"):format(before, after,
+            rawget(config, "IsNew") and "added" or "not added", type(tab.Config.IsNew))
+    end,
+    Recorded = "the addon's table: 10 key(s) before, 10 after, IsNew not added; the tab's IsNew a function",
+    Target = "the addon's table: 10 key(s) before, 10 after, IsNew not added; the tab's IsNew a function",
+})
+
+-- Defaults is enabled by ChangedCount and its Yes runs ResetSection, so one without the other is a Defaults button that
+-- does nothing or never runs (Krowi, 2026-11-07): refused, naming the one that is missing
+Scenario("B30", "a config with ResetSection or ChangedCount but not both", {
+    Observe = function()
+        local lib = LoadCopy()
+        local function Try(left)
+            local ok, message = pcall(lib.CreateWindow, Config(left))
+            return ok and "accepted" or tostring(message):gsub("^Krowi_Options: tab \"Test\": ", "")
+        end
+        return ("without ResetSection: %s; without ChangedCount: %s; without both: %s; with both: %s"):format(
+            Try({ ResetSection = NIL }), Try({ ChangedCount = NIL }), Try({ ResetSection = NIL, ChangedCount = NIL }), Try({}))
+    end,
+    Recorded = "without ResetSection: config.ResetSection is missing: it comes with ChangedCount; without ChangedCount: config.ChangedCount is missing: it comes with ResetSection; without both: accepted; with both: accepted",
+    Target = "without ResetSection: config.ResetSection is missing: it comes with ChangedCount; without ChangedCount: config.ChangedCount is missing: it comes with ResetSection; without both: accepted; with both: accepted",
 })
