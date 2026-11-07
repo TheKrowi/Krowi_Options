@@ -204,10 +204,13 @@ local compact = Toggle("tooltips.compact", "Compact lines", false)
 local skin = Toggle("tooltips.skin", "Skin tooltip", true)
 local thinBorder = Toggle("tooltips.thinBorder", "Thin border", false)
 
--- Debug: a child that hides with its parent, a dropdown greyed with its parent, a dropdown that asks before a choice,
--- and a button
+-- Debug: a child that hides with its parent, an input box greyed with its parent (greyed-slider-input-box, Steps.lua; its
+-- name and description hold none of the words the recorded searches look for), a dropdown greyed with its parent, a
+-- dropdown that asks before a choice, and a button
 local verbose = Toggle("debug.verbose", "Verbose mode", true, { Description = "Prints what the window does, a lantern for debugging." })
 local trace = Toggle("debug.trace", "Trace calls", false, { Indent = 1, Parent = verbose, HiddenIf = function() return not verbose:Get() end })
+local logFile = New{ Id = "debug.logFile", Type = "input", Label = "Log file", Default = "debug.log", Indent = 1, Parent = verbose,
+    DisabledIf = function() return not verbose:Get() end, Description = "The file the log is written to." }
 local tabPriority = Toggle("debug.tabPriority", "Tab priority", true, { Description = "Opens the tab with the highest priority first." })
 local priorityOrder = New{ Id = "debug.priorityOrder", Type = "select", Label = "Priority order", Default = "first", Indent = 1, Parent = tabPriority,
     Values = { { "first", "First tab first" }, { "last", "Last tab first" } }, DisabledIf = function() return not tabPriority:Get() end,
@@ -375,7 +378,7 @@ end
 
 function builders.debug()
     return {
-        Header("Output"), Row(verbose), Row(trace),
+        Header("Output"), Row(verbose), Row(trace), Row(logFile),
         Header("Priority"), Row(tabPriority), Row(priorityOrder),
         Header("Profiles"), Row(profile), Row(resetAll),
     }

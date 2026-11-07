@@ -4,6 +4,7 @@
  -->
 
 <Ui>
+    <Script file="Tests\ErrorLog.lua"/>
     <Include file="Libs\Files.xml"/>
     <Include file="Tests\Files.xml"/>
 </Ui>
