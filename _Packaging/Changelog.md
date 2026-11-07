@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 - Two addons can embed different versions: the frames are built in Lua instead of XML templates, the mixins are on the library (`lib.Internal.Mixins`) instead of globals, and every file carries its own version, so the newest copy of each file is the one in use
 - Search descriptions shows on every tab
 - The window's frame is named `Krowi_Options_2_Window` (was `Krowi_OptionsWindow`), also as `lib.WindowName`
+- Lists Era, Anniversary and WoW Forever beside Retail, Mists and Titan Reforged; the library is tested in game on the first five
 - `CreateWindow` refuses a config with a missing required or a wrong field, and the error names it
 - `CreateWindow` needs only `TabName`, `Saved`, `Groups`, `SectionName` and `GetElements`; the other fields have defaults (`ResetSection` and `ChangedCount` come as a pair), and a key the window does not know is an error that names it
 - The window's place, size, help pane and search ticks are kept in each addon's `saved.Window` with the time of the change, and the window opens from the newest, so the addons agree again after one of them was off for a while

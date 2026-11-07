@@ -18,8 +18,9 @@ There is no build or lint step here. The library tests itself (since 2026-11-06;
   7. `WindowFrame.lua`: the window and the navigation's and help pane's rows.
 
   No saved variables: each addon passes its own table (`config.Saved`).
-- `## Interface: 120105, 50504, 38002`: the clients KAF loads on (Retail 12.1.5, Mists Classic 5.5.4, Titan Reforged 3.80). It only matters for a standalone install, the README badges and the upload's game versions.
-- It needs `KROWI_LIBMAN` and AceLocale (both from Krowi_Util) loaded first. KAF includes `Krowi_Options\Krowi_Options.xml` in its `Libs/Files.xml` after Krowi_Util.
+- `## Interface: 120105, 50504, 20506, 16001, 11509, 38002`: the clients the library is for (Retail 12.1.5, Mists Classic 5.5.4, Anniversary 2.5.6, WoW Forever 1.60.1, Era 1.15.9, Titan Reforged 3.80.2). It only matters for a standalone install, the README badges and the upload's game versions. The comment block that opens this TOC stays: a library's TOC is never loaded as a folder of its own by a player, and only an addon's TOC must start with `## Interface` (Krowi, 2026-11-07).
+- It needs `KROWI_LIBMAN` and AceLocale (both from Krowi_Util) loaded first, and **Krowi_Util 2.5 or newer**, which brought `Krowi_Tooltip`, the tooltip the help pane uses instead of `GameTooltip`; nothing here needs Krowi_Util 2.8's `IsModern` or `IsForever`. KAF includes `Krowi_Options\Krowi_Options.xml` in its `Libs/Files.xml` after Krowi_Util.
+- **Clients** (review of 2026-11-07, Blizzard's FrameXML of live, classic, classic_anniversary, classic_era, classic_titan and forever, and `Find-DeprecatedApi.ps1` on each: no uses): every template, mixin, global, atlas and widget method the library uses exists on all six; Titan runs the wrath load path (the same files as Era and Anniversary, or as Mists) and differs only in its close button's frame level (510). Differences that stay: a Classic slider keeps both arrows enabled at the ends of its range and a Classic tab does not brighten under the mouse, as the game's own Options window there. Tested in game on Retail, Mists, Forever, Era and Anniversary; Titan has no local install and is argued from source only. Dead code listed, not removed: the `SetMinResize`/`SetMaxResize` fallback in `WindowLayout.lua`.
 
 ## No templates, no globals
 
@@ -29,7 +30,7 @@ A second embedded copy must load without a warning and must not mix its code wit
 - **Mixins on the library.** `lib.Internal.Mixins.<Name>`, applied by the builders.
 - **The globals are the window's name and the template children Blizzard names after it.**
   - The library's own: the window's frame name, `lib.WindowName` (`Krowi_Options_2_Window`; 1.x's was `Krowi_OptionsWindow`).
-  - Blizzard's templates add, through their `$parent` names: `Krowi_Options_2_WindowClearButton` and `…SearchIcon` (`SearchBoxTemplate`), and `…Text` (`UIPanelButtonNoTooltipTemplate`, rewritten by every such button); on Mists also `…TitleBg` (`SettingsFrameTemplate`).
+  - Blizzard's templates add, through their `$parent` names: `Krowi_Options_2_WindowClearButton` and `…SearchIcon` (`SearchBoxTemplate`), and `…Text` (`UIPanelButtonNoTooltipTemplate`, rewritten by every such button); on every Classic client (Mists, Era, Anniversary, Titan) also `…TitleBg` (`SettingsFrameTemplate`).
   - No other code reads them. The test addon's step `library-globals-window` lists them with the window built and fails on any global outside the window's name (Retail and Mists, 2026-11-05 in KAF, since 2026-11-06 here).
 
 ## Versioning
