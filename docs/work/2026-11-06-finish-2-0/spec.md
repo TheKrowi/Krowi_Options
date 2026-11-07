@@ -120,4 +120,9 @@ Krowi, 2026-11-06:
 - **Timing:** KAF 105.0 waits for this work, so 2.0's file set is final at minor 0 with no stubs.
 - **Internals:** moved under `lib.Internal` in 2.0. KAF tests only the public behaviour of its own addon; the library's own test addon covers the internals (the question was asked twice because the first answer asked for the plan to be restated).
 - **Exclusion list:** `_Packaging/.pkgmeta`, its `ignore:` list, read by the addon manager and the kit (option 7 replaced by Krowi's name).
+- **Phase 3, 2026-11-07:**
+  - **B13, input box:** it saves on focus lost as well as on Enter; Escape still reverts to the saved value.
+  - **B12, select:** a saved value that is no longer one of the choices is replaced: the dropdown shows the option's default and the default is written to the saved variable ("keeping things shown that no longer exist and work makes no sense"). Falls back to the first choice when the option has no default.
+  - **B14b/c, broken section:** `SectionId` and `OnSectionShown` change only for a section that drew; the previous section stays current; the error still reaches BugGrabber.
+  - **Scope:** the 27 open `Bugs` scenarios plus the extra defects (select menu rebuilt on every refresh, signature ignoring card text/`IsNew` and grid `Cells`, input `OnEscapePressed` unchecked, `|H..|h` and `|K..|k` in search, a tab-list item without `Show`, `ScrollToOption` missing tab rows and grid cells, TabRow `Names` without `Item`, the duplicated `helpWidth - 52`, a hidden key button on a non-key row). B3 and B9, which accept any reasonable fix, are decided in the plan.
 - Taken from the earlier gate answers: all six phases, a gate after each, `Five required plus an unknown-key check` for the config, Era, Anniversary and Forever added and tested, the test addon in this repo as the host on every client.

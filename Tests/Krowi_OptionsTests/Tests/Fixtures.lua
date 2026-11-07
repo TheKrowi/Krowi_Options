@@ -158,15 +158,15 @@ local function Always()
     return true
 end
 
--- Window: the toggle, range and input the change steps use, a check box with a slider, one that needs a reload, and three
--- check boxes with a button each
+-- Window: the toggle, range and input the change steps use, a check box with a slider that needs a reload while the
+-- check box does not (undo-reload, Steps.lua), one that needs a reload, and three check boxes with a button each
 local centerTitle = Toggle("window.centerTitle", "Center the title", false, { Description = "Places the window's title in the middle of its bar." })
 local indentation = New{ Id = "window.indentation", Type = "range", Label = "Indentation", Default = 15, Min = 0, Max = 40, Step = 5, Unit = "px",
     Description = "How far each level of a list moves in." }
 local dateFormat = New{ Id = "window.dateFormat", Type = "input", Label = "Date format", Default = "dd.mm.yyyy", Description = "How the list writes a date." }
 local twoColumns = Toggle("window.twoColumns", "Force two columns", true, { Description = "Splits a long list in two columns." })
 local columnThreshold = New{ Id = "window.columnThreshold", Type = "range", Label = "Column threshold", Default = 8, Min = 1, Max = 20, Step = 1,
-    Description = "The number of rows from which a list splits.", DisabledIf = function() return not twoColumns:Get() end }
+    NeedsReload = true, Description = "The number of rows from which a list splits.", DisabledIf = function() return not twoColumns:Get() end }
 local oldLook = Toggle("window.oldLook", "Use the old look", false, { NeedsReload = true,
     Description = "Draws the window as it looked before, lantern art included." })
 local function Remember(key, label)

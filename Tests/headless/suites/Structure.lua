@@ -389,8 +389,8 @@ Search("ver", false, true, ver)
 Search("ver", true, false, ver)
 Search("ver", true, true, ver)
 
--- The text searched for keeps Retail's named colour code (only its |r goes), so nothing holds it; Bugs B7 has the code
--- in a name
+-- Retail's named colour code goes from the text searched for as from the names (Bugs B7), which leaves "x", in no name
+-- or description
 Search("|cnHIGHLIGHT_FONT_COLOR:x|r", false, false, nothing)
 Search("|cnHIGHLIGHT_FONT_COLOR:x|r", false, true, nothing)
 Search("|cnHIGHLIGHT_FONT_COLOR:x|r", true, false, nothing)
@@ -438,15 +438,15 @@ local function Page(id, recorded)
     Signature(id, id, ("the signature of the %s page"):format(id), nil, recorded)
 end
 
--- A card row by its cards' names
-Page("overview", [[
+-- A card row by its cards' names, then each card's line and NEW
+Page("overview", [=[
 Header:General
-CardRow:Window,Tooltips,Debug
+CardRow:Window,Tooltips,Debug [The title, the columns, dates and where the windows stand., What a unit's tooltip shows, and in which order., Output, priorities and profiles.]
 Header:Lists
-CardRow:Events,Tabs,Key bindings
-CardRow:Other addons
+CardRow:Events,Tabs,Key bindings [The seasons and the calendar grid., Which tabs show, and their order. (New), The keys of the window and the list.]
+CardRow:Other addons [What this tab does with other addons.]
 Header:About
-CardRow:About]])
+CardRow:About [Who made it.]]=])
 
 -- An option by its id and name, and the id of the one beside it
 Page("window", [[
@@ -500,9 +500,10 @@ Signature("debug-hidden", "debug", "the signature of the debug page with Verbose
     fixtures.Options["debug.verbose"]:Set(false)
 end, (debugPage:gsub("Option:debug%.trace|Trace calls\n", "")))
 
--- The grid's column titles and the tab without a Show (Blizzard's) sign as their kind alone (the signature leaves out a
--- grid's columns and cells and a tab's position: Bugs B4)
-Page("events", [[
+-- The grid's column titles sign as their kind alone (the signature leaves out a grid's columns), a grid row by its name
+-- and its check boxes' ids and names, a tab by its Show's id and name and its position, the tab without a Show
+-- (Blizzard's) by its position alone (Bugs B4, B18)
+Page("events", [=[
 Header:Seasons
 Sub:All seasons
 Option:events.spring|Spring
@@ -511,16 +512,16 @@ Option:events.autumn|Autumn
 Option:events.winter|Winter
 Header:Calendar grid
 GridHeader:
-GridRow:Market day
-GridRow:Harvest fair
-GridRow:Moon festival]])
+GridRow:Market day [events.Market day.show|Market day: Show, events.Market day.remind|Market day: Remind, events.Market day.sound|Market day: Sound]
+GridRow:Harvest fair [events.Harvest fair.show|Harvest fair: Show, events.Harvest fair.remind|Harvest fair: Remind]
+GridRow:Moon festival [events.Moon festival.show|Moon festival: Show, events.Moon festival.remind|Moon festival: Remind, events.Moon festival.sound|Moon festival: Sound]]=])
 
 Page("tabs", [[
 Header:Order
-TabRow:tabs.summary|Summary
-TabRow:tabs.watch|Watch list
-TabRow:tabs.stats|Statistics
-TabRow:
+TabRow:tabs.summary|Summary [1]
+TabRow:tabs.watch|Watch list [2]
+TabRow:tabs.stats|Statistics [3]
+TabRow: [4]
 Header:Behaviour
 Option:tabs.rememberTab|Remember the last tab]])
 
@@ -541,14 +542,14 @@ Option:addons.beta.bars|Restyle bars
 Header:Gamma Maps
 Option:addons.gamma.loaded|Loaded]])
 
-Page("about", [[
+Page("about", [=[
 Header:Credits
 Note:Made for the tests of Krowi_Options.
 SubHeading:Thanks
 Note:To everyone who reports a bug.
 Header:Links
-Link:Debug settings
-Link:Key bindings]])
+Link:Debug settings [Opens the Debug section]
+Link:Key bindings [Opens the Key bindings section]]=])
 
 -- Every section of the fixture tab has its page above
 Check("S3.sections", "every section of the fixture tab has a recorded signature", function()

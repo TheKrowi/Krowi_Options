@@ -122,9 +122,12 @@ end }
 kinds.TabRow = {
     Build = "TabRow",
     Height = 28,
+    -- The name the row draws: its Show's, or the tab's own Name; an element without Item has none
     Names = function(element)
-        local show = element.Item.Show
-        return show and show:GetLabel()
+        local item = element.Item
+        if not item then return nil end
+        if item.Show then return item.Show:GetLabel() end
+        return item.Name
     end,
     -- Its Show check box's option; a tab without one stands for no option
     Options = function(element) return element.Item and element.Item.Show end,

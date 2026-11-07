@@ -116,6 +116,11 @@ local function LoadedWindow(lib, fields)
     return window, box, hooks
 end
 
+-- An error's message without the chunk and line it was raised at ([string "Kinds.lua"]:126: )
+local function ErrorText(message)
+    return (tostring(message):gsub('^%[string ".-"%]:%d+: ', ""))
+end
+
 -- [[ B1: the undo arrow and a paired control that needs a reload ]] --
 Scenario("B1", "the undo arrow resets the paired control but its reload does not light the reload bar", {
     Observe = function()
@@ -130,7 +135,7 @@ Scenario("B1", "the undo arrow resets the paired control but its reload does not
         ScriptOf(row.Reset, "OnClick")()
         return ("Scale reset %s, reload bar %s"):format(withReset and "yes" or "no", window.ReloadPending and "lit" or "not lit")
     end,
-    Recorded = "Scale reset yes, reload bar not lit",
+    Recorded = "Scale reset yes, reload bar lit",
     Target = "Scale reset yes, reload bar lit",
 })
 
@@ -146,7 +151,7 @@ Scenario("B2", "a question asked on the Overview hides its Yes (the Defaults but
         window:AskConfirm("Delete the profile?", Noop) -- a select on the Overview with Confirm asks this
         return ("Yes %s, No %s"):format(shown.Defaults and "shown" or "hidden", shown.Cancel and "shown" or "hidden")
     end,
-    Recorded = "Yes hidden, No shown",
+    Recorded = "Yes shown, No shown",
     Target = "Yes shown, No shown",
 })
 
@@ -169,7 +174,7 @@ Scenario("B3a", "a slider from 0 to 1 without a step reaches only its two ends",
         if not size then return "no Init call" end
         return size > 0 and size <= 0.5 and "reaches values between its ends" or ("only its ends (step " .. size .. ")")
     end,
-    Recorded = "only its ends (step 1)",
+    Recorded = "reaches values between its ends",
     Target = "reaches values between its ends",
 })
 
@@ -179,7 +184,7 @@ Scenario("B3b", "a slider whose min equals its max divides by zero", {
         if not size then return "no Init call" end
         return size == size and size ~= math.huge and size ~= -math.huge and "a finite step" or "0 steps: its step is 0/0"
     end,
-    Recorded = "0 steps: its step is 0/0",
+    Recorded = "a finite step",
     Target = "a finite step",
 })
 
@@ -197,7 +202,7 @@ Scenario("B4a", "after a change a link keeps its old Detail when the page's rows
         window:OnOptionChanged(Option("Changed"))
         return "the link shows " .. tostring(rawget(window.PageScrollBox.Frames[1].Row.Detail, "Shown"))
     end,
-    Recorded = "the link shows 1 profile",
+    Recorded = "the link shows 2 profiles",
     Target = "the link shows 2 profiles",
 })
 
@@ -215,8 +220,27 @@ Scenario("B4b", "after a change a tab row keeps its old Position when the page's
         window:OnOptionChanged(show)
         return "the tab row shows position " .. tostring(rawget(window.PageScrollBox.Frames[1].Row.Position, "Shown"))
     end,
-    Recorded = "the tab row shows position 1",
+    Recorded = "the tab row shows position 2",
     Target = "the tab row shows position 2",
+})
+
+-- A change made on a section reads that section again: the page must be asked for the open section's id
+Scenario("B4c", "after a change the page is read again for the open section", {
+    Observe = function()
+        local lib = LoadCopy()
+        local asked = {}
+        local window = Window(lib, { Saved = {}, SectionId = "first", Config = Config({ GetElements = function(id)
+            asked[#asked + 1] = tostring(id)
+            return id == "first" and { { Kind = "Link", Text = "Profiles", Detail = "1 profile" } } or {}
+        end }) })
+        window.PageScrollBox = DrawingPage(lib, window)
+        window:FillPage(ScrollBoxConstants.DiscardScrollPosition)
+        asked = {}
+        window:OnOptionChanged(Option("Changed"))
+        return "GetElements was asked for " .. table.concat(asked, ", ") .. "; the page keeps " .. #window.PageScrollBox.Frames .. " row(s)"
+    end,
+    Recorded = "GetElements was asked for first; the page keeps 1 row(s)",
+    Target = "GetElements was asked for first; the page keeps 1 row(s)",
 })
 
 -- [[ B5: With on an option that is not a toggle ]] --
@@ -233,7 +257,7 @@ Scenario("B5a", "a range option with an execute With: its own slider sets the Wi
         CallsTo(row.Range, "RegisterCallback")[1][2](nil, 7) -- the slider moved to 7
         return "the slider sets " .. table.concat(set, ", ")
     end,
-    Recorded = "the slider sets Test",
+    Recorded = "the slider sets Volume",
     Target = "the slider sets Volume",
 })
 
@@ -249,7 +273,7 @@ Scenario("B5b", "an execute option with a range With: its own button sets the Wi
         ScriptOf(row.Execute, "OnClick")()
         return "the button sets " .. table.concat(set, ", ")
     end,
-    Recorded = "the button sets Threshold",
+    Recorded = "the button sets Run",
     Target = "the button sets Run",
 })
 
@@ -276,7 +300,7 @@ Scenario("B6", "closing the window during a search shows the section again on th
         end
         return table.concat(lines, "; ")
     end,
-    Recorded = "window first: OnSectionShown 1, GetElements 1; box first: OnSectionShown 1, GetElements 1",
+    Recorded = "window first: OnSectionShown 0, GetElements 0; box first: OnSectionShown 0, GetElements 0",
     Target = "window first: OnSectionShown 0, GetElements 0; box first: OnSectionShown 0, GetElements 0",
 })
 
@@ -293,7 +317,7 @@ Scenario("B7", "the search finds the name inside a named colour code (|cnHIGHLIG
         end
         return ("highlight finds %d row(s), bright %d"):format(Found("highlight"), Found("bright"))
     end,
-    Recorded = "highlight finds 1 row(s), bright 1",
+    Recorded = "highlight finds 0 row(s), bright 1",
     Target = "highlight finds 0 row(s), bright 1",
 })
 
@@ -320,7 +344,7 @@ Scenario("B8", "the window's refresh allocates per row", {
         local perRow = (Bytes(10, 100) - Bytes(0, 100)) / (10 * 100)
         return perRow > 0 and "allocates per row on each refresh" or "allocates nothing per row"
     end,
-    Recorded = "allocates per row on each refresh",
+    Recorded = "allocates nothing per row",
     Target = "allocates nothing per row",
 })
 
@@ -339,7 +363,7 @@ Scenario("B9", "ApplyStrings runs on every tab switch, though the strings are th
         window:ShowTab(a)
         return ("ApplyStrings ran %d time(s) over two switches after the first open"):format(count)
     end,
-    Recorded = "ApplyStrings ran 2 time(s) over two switches after the first open",
+    Recorded = "ApplyStrings ran 0 time(s) over two switches after the first open",
     Target = "ApplyStrings ran 0 time(s) over two switches after the first open",
 })
 
@@ -360,7 +384,7 @@ Scenario("B10", "a window stays shown after its last tab unregisters", {
         tab:Unregister()
         return visible and "left shown" or "hidden"
     end,
-    Recorded = "left shown",
+    Recorded = "hidden",
     Target = "hidden",
 })
 
@@ -374,7 +398,7 @@ Scenario("B11a", "a range option whose saved value is a string passes it to the 
         local init, set = CallsTo(row.Range, "Init")[1], CallsTo(row.Range, "SetValue")
         return ("the slider is given a %s, then a %s"):format(type(init[1]), type(set[#set][1]))
     end,
-    Recorded = "the slider is given a string, then a string",
+    Recorded = "the slider is given a number, then a number",
     Target = "the slider is given a number, then a number",
 })
 
@@ -388,34 +412,114 @@ Scenario("B11b", "an input option whose saved value is a table passes it to the 
         local set = CallsTo(row.Input, "SetText")
         return "the edit box is given a " .. (set[#set] and type(set[#set][1]) or "nothing")
     end,
-    Recorded = "the edit box is given a table",
+    Recorded = "the edit box is given a string",
     Target = "the edit box is given a string",
 })
 
 -- [[ B12: a select whose value is no longer one of its choices ]] --
 -- What the dropdown shows: the selected radio's text, or with none selected its default text
+local function DropdownText(row)
+    local dropdown = row.Select.Dropdown
+    local selected
+    CallsTo(dropdown, "SetupMenu")[1][1](dropdown, { CreateRadio = function(_, text, isSelected)
+        if isSelected() then selected = text end
+    end })
+    local default = CallsTo(dropdown, "SetDefaultText")
+    return selected or (default[#default] and default[#default][1]) or ""
+end
+
+-- The option has the Set every option has (RowMixins.lua's header), which the fix saves the shown choice through; this
+-- one does not keep it
 Scenario("B12", "a select whose value is no longer one of its choices shows blank", {
     Observe = function()
         local lib = LoadCopy()
         local row = OptionRow(lib)
         local option = Option("Profile", { Type = "select", GetValues = function() return { { "a", "Alpha" }, { "b", "Beta" } } end,
-            Get = function() return "gone" end })
+            Get = function() return "gone" end, Set = Noop })
         row:Init({ Kind = "Option", Option = option }, RowWindow(lib))
-        local dropdown = row.Select.Dropdown
-        local selected
-        CallsTo(dropdown, "SetupMenu")[1][1](dropdown, { CreateRadio = function(_, text, isSelected)
-            if isSelected() then selected = text end
-        end })
-        local default = CallsTo(dropdown, "SetDefaultText")
-        local text = selected or (default[#default] and default[#default][1]) or ""
-        return text == "" and "blank" or "not blank"
+        return DropdownText(row) == "" and "blank" or "not blank"
     end,
-    Recorded = "blank",
+    Recorded = "not blank",
     Target = "not blank",
 })
 
+-- Krowi (2026-11-07): it shows its default, or its first choice without one, and saves it through its own Set once per
+-- stale value, so the changed line and the reload bar follow; a Set that does not keep it is not called again
+Scenario("B12b", "a select whose value is no longer one of its choices is set to its default once, and lights the reload bar", {
+    Observe = function()
+        local lines = {}
+        for _, keeps in ipairs({ true, false }) do
+            local lib = LoadCopy()
+            local row = OptionRow(lib)
+            local saved, written = "gone", {}
+            local option = Option("Profile", { Type = "select", GetValues = function() return { { "a", "Alpha" }, { "b", "Beta" } } end,
+                GetDefault = function() return true, "b" end, GetNeedsReload = function() return true end,
+                Get = function() return saved end,
+                Set = function(_, value)
+                    written[#written + 1] = value
+                    if keeps then saved = value end
+                end })
+            local window = RowWindow(lib)
+            row:Init({ Kind = "Option", Option = option }, window)
+            for _ = 1, 3 do row:Refresh() end
+            lines[#lines + 1] = ("a Set that %s: shows %s, written %s, reload bar %s"):format(keeps and "keeps it" or "does not",
+                DropdownText(row), table.concat(written, ", "), window.ReloadPending and "lit" or "not lit")
+        end
+        return table.concat(lines, "; ")
+    end,
+    Recorded = "a Set that keeps it: shows Beta, written b, reload bar lit; a Set that does not: shows Beta, written b, reload bar lit",
+    Target = "a Set that keeps it: shows Beta, written b, reload bar lit; a Set that does not: shows Beta, written b, reload bar lit",
+})
+
+-- Never set (RowMixins.lua, SelectShown): Krowi_AchievementFilter's Copy From and Delete a Profile hold no value, with a
+-- Placeholder and (Delete) a Confirm, and setting them to a choice would copy or delete a profile; its calendar's first
+-- weekday holds -1, its default (the game's own weekday), until a reload. A select that was never set holds no value,
+-- which is not a value that is no longer a choice. Each case but the last has a default and a value that is no choice (9).
+Scenario("B12c", "a select whose value is no choice is never set with a Placeholder or a Confirm, when the value is its default or when it has none", {
+    Observe = function()
+        local lib = LoadCopy()
+        local lines = {}
+        local cases = {
+            { "a Placeholder", { Placeholder = "Choose a profile" } },
+            { "a Confirm", { Confirm = function() return "Delete it?" end } },
+            { "its default", { Get = function() return -1 end, GetDefault = function() return true, -1 end } },
+            { "no value", { Get = function() return nil end } },
+        }
+        for _, case in ipairs(cases) do
+            local row = OptionRow(lib)
+            local written = 0
+            local fields = { Type = "select", GetValues = function() return { { 1, "Sunday" }, { 2, "Monday" } } end,
+                Get = function() return 9 end, GetDefault = function() return true, 2 end, Set = function() written = written + 1 end }
+            for key, value in pairs(case[2]) do fields[key] = value end
+            row:Init({ Kind = "Option", Option = Option("Select", fields) }, RowWindow(lib))
+            row:Refresh()
+            lines[#lines + 1] = ("with %s: %d write(s)"):format(case[1], written)
+        end
+        return table.concat(lines, "; ")
+    end,
+    Recorded = "with a Placeholder: 0 write(s); with a Confirm: 0 write(s); with its default: 0 write(s); with no value: 0 write(s)",
+    Target = "with a Placeholder: 0 write(s); with a Confirm: 0 write(s); with its default: 0 write(s); with no value: 0 write(s)",
+})
+
+-- The write runs while the page's list draws the row: an addon's Set that errors must not leave the row half made
+Scenario("B12d", "a select whose Set errors as it is set to its default stops the row's Init", {
+    Observe = function()
+        local lib = LoadCopy()
+        local row = OptionRow(lib)
+        local option = Option("Profile", { Type = "select", GetValues = function() return { { "a", "Alpha" }, { "b", "Beta" } } end,
+            Get = function() return "gone" end, Set = function() error("Set's own error") end })
+        local ok = pcall(row.Init, row, { Kind = "Option", Option = option }, RowWindow(lib))
+        return ("Init %s, the dropdown %s, the row %s, %d error(s) to the handler"):format(ok and "finished" or "raised",
+            #CallsTo(row.Select, "Show") > 0 and "shown" or "not shown",
+            #CallsTo(row.Label, "SetFontObject") > 0 and "refreshed" or "not refreshed", #handled)
+    end,
+    Recorded = "Init finished, the dropdown shown, the row refreshed, 1 error(s) to the handler",
+    Target = "Init finished, the dropdown shown, the row refreshed, 1 error(s) to the handler",
+})
+
 -- [[ B13: text typed in an input box when it loses focus ]] --
-Scenario("B13", "text typed in an input box is dropped when the box loses focus; only Enter saves it (by design? ask Krowi)", {
+-- Krowi (2026-11-07): the text saves when the box loses focus as well as on Enter; Escape still puts the saved text back
+Scenario("B13", "text typed in an input box is dropped when the box loses focus; only Enter saves it", {
     Observe = function()
         local lib = LoadCopy()
         local row = OptionRow(lib)
@@ -429,8 +533,125 @@ Scenario("B13", "text typed in an input box is dropped when the box loses focus;
         row:Refresh()
         return "after the box loses focus the option holds " .. tostring(saved)
     end,
-    Recorded = "after the box loses focus the option holds old",
-    Target = "after the box loses focus the option holds old",
+    Recorded = "after the box loses focus the option holds typed",
+    Target = "after the box loses focus the option holds typed",
+})
+
+-- The box still holds the typed text when the focus it loses after Escape comes (the stand-in's text does not change), so
+-- only Escape's flag keeps the focus lost from saving it
+Scenario("B13b", "Escape in an input box, then the focus it loses, keeps the saved text", {
+    Observe = function()
+        local lib = LoadCopy()
+        local row = OptionRow(lib)
+        local saved = "old"
+        row.Input.HasFocus = function() return true end
+        row.Input.GetText = function() return "typed" end
+        local option = Option("Name", { Type = "input", Get = function() return saved end, Set = function(_, value) saved = value end })
+        row:Init({ Kind = "Option", Option = option }, RowWindow(lib, { OnOptionChanged = Noop }))
+        ScriptOf(row.Input, "OnEscapePressed")(row.Input)
+        ScriptOf(row.Input, "OnEditFocusLost")(row.Input)
+        return "after Escape and the focus lost the option holds " .. tostring(saved)
+    end,
+    Recorded = "after Escape and the focus lost the option holds old",
+    Target = "after Escape and the focus lost the option holds old",
+})
+
+-- Enter saves and then clears the focus: the focus lost that follows does not save again
+Scenario("B13c", "Enter in an input box, then the focus it loses, saves once", {
+    Observe = function()
+        local lib = LoadCopy()
+        local row = OptionRow(lib)
+        local saved, sets, changes = "old", 0, 0
+        row.Input.HasFocus = function() return true end
+        row.Input.GetText = function() return "typed" end
+        local option = Option("Name", { Type = "input", Get = function() return saved end,
+            Set = function(_, value) sets, saved = sets + 1, value .. "!" end }) -- a Set that changes what it keeps
+        row:Init({ Kind = "Option", Option = option }, RowWindow(lib, { OnOptionChanged = function() changes = changes + 1 end }))
+        ScriptOf(row.Input, "OnEnterPressed")(row.Input)
+        ScriptOf(row.Input, "OnEditFocusLost")(row.Input)
+        return ("Set %d time(s), OnOptionChanged %d time(s)"):format(sets, changes)
+    end,
+    Recorded = "Set 1 time(s), OnOptionChanged 1 time(s)",
+    Target = "Set 1 time(s), OnOptionChanged 1 time(s)",
+})
+
+-- An input row whose box keeps its text and its focus, as the game's does: Focus and Lose are the player clicking into
+-- it and away, its Text what it shows (typing sets it)
+local function InputRow(lib, option)
+    local row = OptionRow(lib)
+    local box = { Text = "", Focused = false }
+    row.Input.HasFocus = function() return box.Focused end
+    row.Input.GetText = function() return box.Text end
+    row.Input.SetText = function(_, text) box.Text = text end
+    row:Init({ Kind = "Option", Option = option }, RowWindow(lib, { OnOptionChanged = Noop }))
+    function box.Focus()
+        box.Focused = true
+        ScriptOf(row.Input, "OnEditFocusGained")(row.Input)
+    end
+    function box.Lose()
+        box.Focused = false
+        ScriptOf(row.Input, "OnEditFocusLost")(row.Input)
+    end
+    return row, box
+end
+
+local function DateFormat(saved)
+    local option = Option("Date format", { Type = "input", Get = function() return saved end, Set = function(_, value) saved = value end })
+    return option, function() return saved end, function(value) saved = value end
+end
+
+-- A focused box is not drawn again, so it holds the text from before a change made elsewhere: Defaults (its page drawn
+-- again, the rows hidden, no refresh before the focus is lost) or the undo arrow (a refresh first)
+Scenario("B13d", "an input box focused while its option is reset to its default writes its old text back when it loses focus", {
+    Observe = function()
+        local lines = {}
+        for _, refreshed in ipairs({ false, true }) do
+            local lib = LoadCopy()
+            local option, Saved, Change = DateFormat("yyyy")
+            local row, box = InputRow(lib, option)
+            box.Focus()
+            Change("dd.mm.yyyy") -- reset to its default
+            if refreshed then row:Refresh() end
+            box.Lose()
+            lines[#lines + 1] = ("%s: the option holds %s"):format(refreshed and "the undo arrow" or "Defaults", Saved())
+        end
+        return table.concat(lines, "; ")
+    end,
+    Recorded = "Defaults: the option holds dd.mm.yyyy; the undo arrow: the option holds dd.mm.yyyy",
+    Target = "Defaults: the option holds dd.mm.yyyy; the undo arrow: the option holds dd.mm.yyyy",
+})
+
+Scenario("B13e", "text typed in a focused input box is saved when the box loses focus", {
+    Observe = function()
+        local lib = LoadCopy()
+        local option, Saved = DateFormat("yyyy")
+        local _, box = InputRow(lib, option)
+        box.Focus()
+        box.Text = "dd/mm"
+        box.Lose()
+        return "the option holds " .. Saved()
+    end,
+    Recorded = "the option holds dd/mm",
+    Target = "the option holds dd/mm",
+})
+
+-- After a change elsewhere the box shows the new value; text typed with nothing changed elsewhere stays
+Scenario("B13f", "a refresh leaves a focused input box's text alone, also after a change made elsewhere", {
+    Observe = function()
+        local lines = {}
+        for _, case in ipairs({ "a change elsewhere", "typing" }) do
+            local lib = LoadCopy()
+            local option, _, Change = DateFormat("yyyy")
+            local row, box = InputRow(lib, option)
+            box.Focus()
+            if case == "typing" then box.Text = "dd/mm" else Change("dd.mm.yyyy") end
+            row:Refresh()
+            lines[#lines + 1] = ("after %s the box shows %s"):format(case, box.Text)
+        end
+        return table.concat(lines, "; ")
+    end,
+    Recorded = "after a change elsewhere the box shows dd.mm.yyyy; after typing the box shows dd/mm",
+    Target = "after a change elsewhere the box shows dd.mm.yyyy; after typing the box shows dd/mm",
 })
 
 -- [[ B14: a section whose GetElements errors (backlog #27) ]] --
@@ -463,7 +684,7 @@ Scenario("B14b", "a section whose GetElements errors becomes the window's Sectio
         local window = BrokenSection()
         return "SectionId " .. tostring(window.SectionId)
     end,
-    Recorded = "SectionId broken",
+    Recorded = "SectionId first",
     Target = "SectionId first",
 })
 
@@ -472,7 +693,7 @@ Scenario("B14c", "a section whose GetElements errors has had its OnSectionShown"
         local _, shownFor = BrokenSection()
         return #shownFor > 0 and ("OnSectionShown ran for " .. table.concat(shownFor, ", ")) or "OnSectionShown did not run"
     end,
-    Recorded = "OnSectionShown ran for broken",
+    Recorded = "OnSectionShown did not run",
     Target = "OnSectionShown did not run",
 })
 
@@ -491,7 +712,7 @@ Scenario("B15a", "a tab without a saved table: tab:Open() before the window exis
         local tab = lib.CreateWindow(Config({ TabName = "Broken", Saved = function() return nil end }))
         return ErrorChunk(lib, tab, "tab:Open()")
     end,
-    Recorded = "the error points at Krowi_Options.lua",
+    Recorded = "the error points at MyAddon.lua",
     Target = "the error points at MyAddon.lua",
 })
 
@@ -502,7 +723,7 @@ Scenario("B15b", "a tab without a saved table: tab:Open() on a window already ma
         Internal(lib).Frame = Window(lib, { Show = Noop, ShowSection = Noop })
         return ErrorChunk(lib, tab, "tab:Open()")
     end,
-    Recorded = "the error points at WindowMixin.lua",
+    Recorded = "the error points at MyAddon.lua",
     Target = "the error points at MyAddon.lua",
 })
 
@@ -586,4 +807,186 @@ Scenario("B16g", "a config with a misspelled key (OnSectionShow) is accepted sil
     end,
     Recorded = "accepted silently",
     Target = "an error naming the tab and the key",
+})
+
+-- [[ B17: a select row's menu made again on every refresh ]] --
+-- GenerateMenu runs the row's menu generator again, which makes two closures per choice. The game's dropdown shows a new
+-- value without it: DropdownButtonMixin:Update (Blizzard_Menu/DropdownButton.lua) reads the selected radio again from the
+-- menu already made.
+Scenario("B17", "a select row makes its menu again, two closures per choice, on every refresh, also when nothing changed", {
+    Observe = function()
+        local lib = LoadCopy()
+        local row = OptionRow(lib)
+        local option = Option("Profile", { Type = "select", GetValues = function() return { { "a", "Alpha" }, { "b", "Beta" } } end,
+            Get = function() return "a" end })
+        row:Init({ Kind = "Option", Option = option }, RowWindow(lib))
+        local dropdown = row.Select.Dropdown
+        local setup, generated = #CallsTo(dropdown, "SetupMenu"), #CallsTo(dropdown, "GenerateMenu")
+        for _ = 1, 3 do row:Refresh() end
+        return ("3 refreshes of an unchanged select: SetupMenu %d time(s), GenerateMenu %d time(s)"):format(
+            #CallsTo(dropdown, "SetupMenu") - setup, #CallsTo(dropdown, "GenerateMenu") - generated)
+    end,
+    Recorded = "3 refreshes of an unchanged select: SetupMenu 0 time(s), GenerateMenu 0 time(s)",
+    Target = "3 refreshes of an unchanged select: SetupMenu 0 time(s), GenerateMenu 0 time(s)",
+})
+
+-- [[ B18: what the page's signature leaves out (wider than B4) ]] --
+-- Two pages that differ in one field only, each signed by the real FillPage. The same signature keeps the rows drawn
+-- after a change, and a card row has no Refresh, a grid row refreshes the cells of the element it was drawn with.
+local function Signatures(first, second)
+    local lib = LoadCopy()
+    local function Sign(elements)
+        local window = Window(lib, { Saved = {}, SectionId = "first", Config = Config({ GetElements = function() return elements end }) })
+        window:FillPage(ScrollBoxConstants.DiscardScrollPosition)
+        return window.Signature
+    end
+    return Sign(first) == Sign(second) and "the same signature" or "different signatures"
+end
+
+local function CardPage(text, isNew)
+    return { { Kind = "Cards", Cards = { { Name = "Window", Text = text, IsNew = isNew } } } }
+end
+
+local function GridPage(cell)
+    return { { Kind = "Grid", Columns = { "Spring" }, Rows = { { Label = "Market day", Cells = { cell } } } } }
+end
+
+Scenario("B18a", "two pages that differ only in a card's Text have the same signature", {
+    Observe = function()
+        return Signatures(CardPage("Size and place", false), CardPage("Size, place and look", false))
+    end,
+    Recorded = "different signatures",
+    Target = "different signatures",
+})
+
+Scenario("B18b", "two pages that differ only in a card's IsNew have the same signature", {
+    Observe = function()
+        return Signatures(CardPage("Size and place", false), CardPage("Size and place", true))
+    end,
+    Recorded = "different signatures",
+    Target = "different signatures",
+})
+
+Scenario("B18c", "two pages that differ only in a grid row's Cells have the same signature", {
+    Observe = function()
+        return Signatures(GridPage(Option("Spring market", { Id = "spring" })), GridPage(Option("Summer market", { Id = "summer" })))
+    end,
+    Recorded = "different signatures",
+    Target = "different signatures",
+})
+
+-- [[ B19: Escape in an input box whose saved value is a table ]] --
+-- The box has the focus, as it has when Escape is pressed, so the row's refresh leaves its text alone (B11b is that path)
+Scenario("B19", "Escape in an input box whose saved value is a table passes it to the edit box", {
+    Observe = function()
+        local lib = LoadCopy()
+        local row = OptionRow(lib)
+        row.Input.HasFocus = function() return true end
+        local option = Option("Name", { Type = "input", Get = function() return {} end })
+        row:Init({ Kind = "Option", Option = option }, RowWindow(lib))
+        ScriptOf(row.Input, "OnEscapePressed")(row.Input)
+        local set = CallsTo(row.Input, "SetText")
+        return "Escape gives the edit box a " .. (set[#set] and type(set[#set][1]) or "nothing")
+    end,
+    Recorded = "Escape gives the edit box a string",
+    Target = "Escape gives the edit box a string",
+})
+
+-- [[ B20: hyperlinks and |K codes in the search ]] --
+-- What the player reads of |Hitem:1:0|h[Name]|h is [Name]; a |Kq1|k shows a name the search cannot read. Neither the
+-- link's data nor the code is text the player sees.
+Scenario("B20", "the search finds a hyperlink's data and a |K code's letters", {
+    Observe = function()
+        local lib = LoadCopy()
+        lib.CreateWindow(Config({ GetElements = function()
+            return { { Kind = "Option", Option = Option("|Hitem:1:0|h[Name]|h |Kq1|k") } }
+        end }))
+        local function Found(text)
+            local result = Internal(lib).Search(text, true, nil, false)
+            return result[1] and #result[1].Sections[1].Rows or 0
+        end
+        return ("item finds %d row(s), kq1 %d, name %d"):format(Found("item"), Found("kq1"), Found("name"))
+    end,
+    Recorded = "item finds 0 row(s), kq1 0, name 1",
+    Target = "item finds 0 row(s), kq1 0, name 1",
+})
+
+-- [[ B21: a tab-list item without Show ]] --
+-- The contract (RowMixins.lua's header) gives such an item no name; Target assumes an optional Name, the text the row
+-- draws, and without one nothing, as every other text of the rows falls back to "" (Text, Detail, Source)
+Scenario("B21", "a tab-list item without Show draws ? as its name", {
+    Observe = function()
+        local lib = LoadCopy()
+        local window = Window(lib, { Saved = {}, SectionId = "first", Config = Config({ GetElements = function()
+            return { { Kind = "TabList", Items = { { Position = 1, Name = "Achievements", Source = "Blizzard" }, { Position = 2 } } } }
+        end }) })
+        window.PageScrollBox = DrawingPage(lib, window)
+        window:FillPage(ScrollBoxConstants.DiscardScrollPosition)
+        local frames = window.PageScrollBox.Frames
+        return ('with a Name "%s", without "%s"'):format(tostring(rawget(frames[1].Row.Label, "Shown")),
+            tostring(rawget(frames[2].Row.Label, "Shown")))
+    end,
+    Recorded = 'with a Name "Achievements", without ""',
+    Target = 'with a Name "Achievements", without ""',
+})
+
+-- [[ B22: ScrollToOption and the options that are not an option row's ]] --
+-- RowMixins.lua's header calls a grid's check boxes and a tab list's Show options too, each with its Id
+Scenario("B22", "ScrollToOption finds neither a tab's Show nor a grid cell", {
+    Observe = function()
+        local lib = LoadCopy()
+        local scrolled
+        local window = Window(lib, { Saved = {}, SectionId = "first", ScrollToOption = Internal(lib).Mixins.Window.ScrollToOption,
+            PageScrollBox = { SetDataProvider = Noop, ScrollToElementData = function(_, element) scrolled = element end },
+            Config = Config({ GetElements = function()
+                return {
+                    { Kind = "Option", Option = Option("Scale", { Id = "scale" }) },
+                    { Kind = "TabList", Items = { { Position = 1, Show = Option("Achievements", { Id = "tab" }) } } },
+                    { Kind = "Grid", Columns = { "Spring" }, Rows = { { Label = "Market day", Cells = { Option("Spring market", { Id = "cell" }) } } } },
+                }
+            end }) })
+        window:FillPage(ScrollBoxConstants.DiscardScrollPosition)
+        local function Find(id)
+            scrolled = nil
+            window:ScrollToOption(id)
+            return scrolled and scrolled.Kind or "none"
+        end
+        return ("an option row's option: %s, a tab's Show: %s, a grid cell: %s"):format(Find("scale"), Find("tab"), Find("cell"))
+    end,
+    Recorded = "an option row's option: Option, a tab's Show: TabRow, a grid cell: GridRow",
+    Target = "an option row's option: Option, a tab's Show: TabRow, a grid cell: GridRow",
+})
+
+-- [[ B23: a TabRow element without Item in the search ]] --
+-- The TabRow kind's Options guards a missing Item (Kinds.lua), its Names does not; the search leaves the section out
+Scenario("B23", "a section with a TabRow element without Item errors in the search and is left out", {
+    Observe = function()
+        local lib = LoadCopy()
+        lib.CreateWindow(Config({ GetElements = function()
+            return { { Kind = "TabRow" }, { Kind = "Option", Option = Option("Bright") } }
+        end }))
+        local result = Internal(lib).Search("bright", true, nil, false)
+        local rows = result[1] and #result[1].Sections[1].Rows or 0
+        return ("the search finds %d row(s), %d error(s) to the handler%s"):format(rows, #handled,
+            handled[1] and (": " .. ErrorText(handled[1])) or "")
+    end,
+    Recorded = "the search finds 1 row(s), 0 error(s) to the handler",
+    Target = "the search finds 1 row(s), 0 error(s) to the handler",
+})
+
+-- [[ B24: a key button's scripts on a row that is not a key option's ]] --
+-- Unreachable in game, where the key buttons of such a row are hidden: a click starts a capture, the next key sets it
+Scenario("B24", "a hidden key button fired on a toggle's row errors on Slots", {
+    Observe = function()
+        local lib = LoadCopy()
+        local row = OptionRow(lib)
+        InCombatLockdown = function() return false end
+        IsAltKeyDown, IsControlKeyDown, IsShiftKeyDown = Noop, Noop, Noop
+        row:Init({ Kind = "Option", Option = Option("Show the bar") }, RowWindow(lib, { OnOptionChanged = Noop }))
+        ScriptOf(row.Key1, "OnClick")()
+        local ok, message = pcall(ScriptOf(row.Key1, "OnKeyDown"), row.Key1, "A")
+        return ok and "no error" or ("error: " .. ErrorText(message))
+    end,
+    Recorded = "no error",
+    Target = "no error",
 })

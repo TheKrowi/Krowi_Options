@@ -136,7 +136,11 @@ function WindowMixin:ShowTab(tab, sectionId, optionId)
         self.Tab = tab
         self.Config, self.Strings, self.Saved = tab.Config, lib.GetStrings(), saved
         self.SectionId, self.Help, self.Searching, self.Confirming = nil, nil, nil, nil
-        self:ApplyStrings()
+        -- The strings are the library's, the same on every tab: put on the controls once, not on every switch
+        if self.AppliedStrings ~= self.Strings then
+            self.AppliedStrings = self.Strings
+            self:ApplyStrings()
+        end
         self:RefreshTabs()
     end
     self:Show()

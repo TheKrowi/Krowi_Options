@@ -77,12 +77,13 @@ function WindowMixin:SearchElements(text)
     return list
 end
 
--- From the first letter, as the game's; an empty box goes back to the section. scrollPosition: the results found again
--- after a change keep theirs, and a question asked in them stays
+-- From the first letter, as the game's; an empty box goes back to the section. The box's OnHide empties it as the window
+-- closes too: a closed window does not go back, its next open shows a section (ShowTab). scrollPosition: the results
+-- found again after a change keep theirs, and a question asked in them stays
 function WindowMixin:OnSearch(text, scrollPosition)
     text = text and text:gsub("^%s+", ""):gsub("%s+$", "") or ""
     if text == "" then
-        if self.Searching then self:ShowSection(self.SectionId, nil, true) end
+        if self.Searching and self:IsShown() then self:ShowSection(self.SectionId, nil, true) end
         return
     end
     self.Searching = true

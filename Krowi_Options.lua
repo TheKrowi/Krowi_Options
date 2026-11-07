@@ -66,7 +66,8 @@ lib.Markup = {
     SectionName(id) a section's name in the navigation, the search and the help pane's kicker
     IsNew(id)       whether the navigation marks a section New
     Landing()       the section to open when none is asked for
-    OnSectionShown(id)
+    OnSectionShown(id) runs after GetElements(id) has been read for it, and not at all for a section whose GetElements
+                    errors while another section is open (that one never becomes the open section)
     GetElements(id) the section's elements (RowMixins.lua's header). It runs on every change and, while searching, for
                     every section of every searched tab on each keystroke, so it builds cheaply and changes nothing.
     GetHelp(id)     nil, or { Title, Blocks, ShowMe, CanShowMe, ShowMeSecure, ShowMeNote }:
@@ -125,8 +126,18 @@ local function FindSaved(registered)
     return registered.Saved
 end
 
+local function NoSaved(tab)
+    return ("Krowi_Options: tab %q: config.Saved gave no table"):format(tostring(tab.Config.TabName))
+end
+
 function tab:GetSaved()
-    return FindSaved(self) or error(("Krowi_Options: tab %q: config.Saved gave no table"):format(tostring(self.Config.TabName)), 2)
+    return FindSaved(self) or error(NoSaved(self), 2)
+end
+
+-- A tab without a saved table errors at the addon's own call of Open or Toggle, not inside the library (level 3: the
+-- caller of the public function that asks)
+local function RequireSaved(tab)
+    if not FindSaved(tab) then error(NoSaved(tab), 3) end
 end
 
 -- Another addon's saved table, asked for the shared state: an addon whose Saved errors is left out, its error goes to the
@@ -143,6 +154,7 @@ function tab:GetFrame()
 end
 
 function tab:Open(sectionId)
+    RequireSaved(self)
     lib.Internal.GetFrame(self):ShowTab(self, sectionId)
 end
 
@@ -150,6 +162,7 @@ function tab:Toggle(sectionId)
     if self:IsShown() then
         lib.Internal.Frame:Hide()
     else
+        RequireSaved(self)
         self:Open(sectionId)
     end
 end
@@ -172,7 +185,12 @@ function tab:Unregister()
             break
         end
     end
-    if lib.Internal.Frame then lib.Internal.Frame:RefreshTabs() end
+    local frame = lib.Internal.Frame
+    if frame then
+        frame:RefreshTabs()
+        -- No tab left to show: a window left open would show the one that went
+        if #lib.Internal.Tabs == 0 and frame:IsShown() then frame:Hide() end
+    end
 end
 
 local function SortTabs()
