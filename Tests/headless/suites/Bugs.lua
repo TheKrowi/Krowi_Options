@@ -473,8 +473,9 @@ Scenario("B12b", "a select whose value is no longer one of its choices is set to
 
 -- Never set (RowMixins.lua, SelectShown): Krowi_AchievementFilter's Copy From and Delete a Profile hold no value, with a
 -- Placeholder and (Delete) a Confirm, and setting them to a choice would copy or delete a profile; its calendar's first
--- weekday holds -1, its default (the game's own weekday), until a reload
-Scenario("B12c", "a select whose value is no choice is never set with a Placeholder or a Confirm, or when the value is its default", {
+-- weekday holds -1, its default (the game's own weekday), until a reload. A select that was never set holds no value,
+-- which is not a value that is no longer a choice. Each case but the last has a default and a value that is no choice (9).
+Scenario("B12c", "a select whose value is no choice is never set with a Placeholder or a Confirm, when the value is its default or when it has none", {
     Observe = function()
         local lib = LoadCopy()
         local lines = {}
@@ -482,12 +483,13 @@ Scenario("B12c", "a select whose value is no choice is never set with a Placehol
             { "a Placeholder", { Placeholder = "Choose a profile" } },
             { "a Confirm", { Confirm = function() return "Delete it?" end } },
             { "its default", { Get = function() return -1 end, GetDefault = function() return true, -1 end } },
+            { "no value", { Get = function() return nil end } },
         }
         for _, case in ipairs(cases) do
             local row = OptionRow(lib)
             local written = 0
             local fields = { Type = "select", GetValues = function() return { { 1, "Sunday" }, { 2, "Monday" } } end,
-                Get = function() return nil end, Set = function() written = written + 1 end }
+                Get = function() return 9 end, GetDefault = function() return true, 2 end, Set = function() written = written + 1 end }
             for key, value in pairs(case[2]) do fields[key] = value end
             row:Init({ Kind = "Option", Option = Option("Select", fields) }, RowWindow(lib))
             row:Refresh()
@@ -495,8 +497,24 @@ Scenario("B12c", "a select whose value is no choice is never set with a Placehol
         end
         return table.concat(lines, "; ")
     end,
-    Recorded = "with a Placeholder: 0 write(s); with a Confirm: 0 write(s); with its default: 0 write(s)",
-    Target = "with a Placeholder: 0 write(s); with a Confirm: 0 write(s); with its default: 0 write(s)",
+    Recorded = "with a Placeholder: 0 write(s); with a Confirm: 0 write(s); with its default: 0 write(s); with no value: 0 write(s)",
+    Target = "with a Placeholder: 0 write(s); with a Confirm: 0 write(s); with its default: 0 write(s); with no value: 0 write(s)",
+})
+
+-- The write runs while the page's list draws the row: an addon's Set that errors must not leave the row half made
+Scenario("B12d", "a select whose Set errors as it is set to its default stops the row's Init", {
+    Observe = function()
+        local lib = LoadCopy()
+        local row = OptionRow(lib)
+        local option = Option("Profile", { Type = "select", GetValues = function() return { { "a", "Alpha" }, { "b", "Beta" } } end,
+            Get = function() return "gone" end, Set = function() error("Set's own error") end })
+        local ok = pcall(row.Init, row, { Kind = "Option", Option = option }, RowWindow(lib))
+        return ("Init %s, the dropdown %s, the row %s, %d error(s) to the handler"):format(ok and "finished" or "raised",
+            #CallsTo(row.Select, "Show") > 0 and "shown" or "not shown",
+            #CallsTo(row.Label, "SetFontObject") > 0 and "refreshed" or "not refreshed", #handled)
+    end,
+    Recorded = "Init finished, the dropdown shown, the row refreshed, 1 error(s) to the handler",
+    Target = "Init finished, the dropdown shown, the row refreshed, 1 error(s) to the handler",
 })
 
 -- [[ B13: text typed in an input box when it loses focus ]] --
@@ -555,6 +573,85 @@ Scenario("B13c", "Enter in an input box, then the focus it loses, saves once", {
     end,
     Recorded = "Set 1 time(s), OnOptionChanged 1 time(s)",
     Target = "Set 1 time(s), OnOptionChanged 1 time(s)",
+})
+
+-- An input row whose box keeps its text and its focus, as the game's does: Focus and Lose are the player clicking into
+-- it and away, its Text what it shows (typing sets it)
+local function InputRow(lib, option)
+    local row = OptionRow(lib)
+    local box = { Text = "", Focused = false }
+    row.Input.HasFocus = function() return box.Focused end
+    row.Input.GetText = function() return box.Text end
+    row.Input.SetText = function(_, text) box.Text = text end
+    row:Init({ Kind = "Option", Option = option }, RowWindow(lib, { OnOptionChanged = Noop }))
+    function box.Focus()
+        box.Focused = true
+        ScriptOf(row.Input, "OnEditFocusGained")(row.Input)
+    end
+    function box.Lose()
+        box.Focused = false
+        ScriptOf(row.Input, "OnEditFocusLost")(row.Input)
+    end
+    return row, box
+end
+
+local function DateFormat(saved)
+    local option = Option("Date format", { Type = "input", Get = function() return saved end, Set = function(_, value) saved = value end })
+    return option, function() return saved end, function(value) saved = value end
+end
+
+-- A focused box is not drawn again, so it holds the text from before a change made elsewhere: Defaults (its page drawn
+-- again, the rows hidden, no refresh before the focus is lost) or the undo arrow (a refresh first)
+Scenario("B13d", "an input box focused while its option is reset to its default writes its old text back when it loses focus", {
+    Observe = function()
+        local lines = {}
+        for _, refreshed in ipairs({ false, true }) do
+            local lib = LoadCopy()
+            local option, Saved, Change = DateFormat("yyyy")
+            local row, box = InputRow(lib, option)
+            box.Focus()
+            Change("dd.mm.yyyy") -- reset to its default
+            if refreshed then row:Refresh() end
+            box.Lose()
+            lines[#lines + 1] = ("%s: the option holds %s"):format(refreshed and "the undo arrow" or "Defaults", Saved())
+        end
+        return table.concat(lines, "; ")
+    end,
+    Recorded = "Defaults: the option holds dd.mm.yyyy; the undo arrow: the option holds dd.mm.yyyy",
+    Target = "Defaults: the option holds dd.mm.yyyy; the undo arrow: the option holds dd.mm.yyyy",
+})
+
+Scenario("B13e", "text typed in a focused input box is saved when the box loses focus", {
+    Observe = function()
+        local lib = LoadCopy()
+        local option, Saved = DateFormat("yyyy")
+        local _, box = InputRow(lib, option)
+        box.Focus()
+        box.Text = "dd/mm"
+        box.Lose()
+        return "the option holds " .. Saved()
+    end,
+    Recorded = "the option holds dd/mm",
+    Target = "the option holds dd/mm",
+})
+
+-- After a change elsewhere the box shows the new value; text typed with nothing changed elsewhere stays
+Scenario("B13f", "a refresh leaves a focused input box's text alone, also after a change made elsewhere", {
+    Observe = function()
+        local lines = {}
+        for _, case in ipairs({ "a change elsewhere", "typing" }) do
+            local lib = LoadCopy()
+            local option, _, Change = DateFormat("yyyy")
+            local row, box = InputRow(lib, option)
+            box.Focus()
+            if case == "typing" then box.Text = "dd/mm" else Change("dd.mm.yyyy") end
+            row:Refresh()
+            lines[#lines + 1] = ("after %s the box shows %s"):format(case, box.Text)
+        end
+        return table.concat(lines, "; ")
+    end,
+    Recorded = "after a change elsewhere the box shows dd.mm.yyyy; after typing the box shows dd/mm",
+    Target = "after a change elsewhere the box shows dd.mm.yyyy; after typing the box shows dd/mm",
 })
 
 -- [[ B14: a section whose GetElements errors (backlog #27) ]] --

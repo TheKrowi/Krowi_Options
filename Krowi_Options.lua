@@ -66,7 +66,8 @@ lib.Markup = {
     SectionName(id) a section's name in the navigation, the search and the help pane's kicker
     IsNew(id)       whether the navigation marks a section New
     Landing()       the section to open when none is asked for
-    OnSectionShown(id)
+    OnSectionShown(id) runs after GetElements(id) has been read for it, and not at all for a section whose GetElements
+                    errors while another section is open (that one never becomes the open section)
     GetElements(id) the section's elements (RowMixins.lua's header). It runs on every change and, while searching, for
                     every section of every searched tab on each keystroke, so it builds cheaply and changes nothing.
     GetHelp(id)     nil, or { Title, Blocks, ShowMe, CanShowMe, ShowMeSecure, ShowMeNote }:

@@ -50,6 +50,13 @@ if not sub then return end
 -- What is not the public surface lives under lib.Internal (Krowi_Options.lua)
 lib.Internal = lib.Internal or {}
 
+-- A call into the addon whose tab is open: its error goes to the game's error handler and the row goes on with what it
+-- got (Krowi_Options.lua, Protected; each file that needs it has its own)
+local function Protected(func, ...)
+    local args, count = { ... }, select("#", ...)
+    return xpcall(function() return func(unpack(args, 1, count)) end, CallErrorHandler)
+end
+
 -- [[ Where a row's name and controls stand ]] --
 -- In a column 330 from the row's right edge, wide enough for the two key buttons (Krowi kept it over the game's placement
 -- from the row's centre, docs/work/2026-11-02-options-widths). Each is an anchor on the row, { relativePoint, x }, so a
@@ -175,14 +182,16 @@ local function ChangedQuietly(row, option)
     if option:GetNeedsReload() then row.Window.ReloadPending = true end
 end
 
--- The text typed in an input box, saved as the box loses the focus, as Enter saves it (Krowi, 2026-11-07); a box whose
--- text is its option's saves nothing. A box hidden with its row (the window closed, the page drawn again) loses the
--- focus inside that hide.
+-- The text typed in an input box, saved as the box loses the focus, as Enter saves it (Krowi, 2026-11-07). Only text
+-- typed: what differs from the text the box had when it took the focus or was last drawn (InputStart). A box with the
+-- focus keeps its text through a refresh, so after a reset or Defaults that it was not drawn again for, its text is
+-- older than its option's and must not be written back. A box hidden with its row (the window closed, the page drawn
+-- again) loses the focus inside that hide.
 local function SaveInput(row, editBox)
     local option = row.Option
     if not option or option.Type ~= "input" then return end
     local text = editBox:GetText()
-    if text == InputText(option:Get()) then return end
+    if text == row.InputStart or text == InputText(option:Get()) then return end
     option:Set(text)
     if editBox:IsVisible() then
         row.Window:OnOptionChanged(option)
@@ -232,7 +241,7 @@ function OptionRowMixin:OnLoad()
         self.InputKept = true
         editBox:ClearFocus()
     end)
-    self.Input:HookScript("OnEditFocusGained", function() self.InputKept = false end)
+    self.Input:HookScript("OnEditFocusGained", function(editBox) self.InputKept, self.InputStart = false, editBox:GetText() end)
     self.Input:HookScript("OnEditFocusLost", function(editBox)
         if self.InputKept then
             self.InputKept = false
@@ -324,7 +333,9 @@ end
 
 -- The value a select shows: its saved value, or when that is no longer one of its choices (a profile deleted elsewhere)
 -- its default, or its first choice without one, which is then saved through the option's own Set (Krowi, 2026-11-07).
--- Once per stale value, so a Set that does not keep it cannot loop. Never set:
+-- Once per stale value, so a Set that does not keep it cannot loop; the Set runs while the list draws the row, so an
+-- error in it goes to the error handler and the row is still made. Never set:
+-- - a select with no value: one never set, which is not a value that is no longer a choice;
 -- - a select with a Placeholder or a Confirm: it shows its placeholder while nothing is chosen, and asks before a choice
 --   is made (Krowi_AchievementFilter's Copy From and Delete a Profile hold no value and have both: setting them would
 --   copy or delete a profile);
@@ -332,7 +343,7 @@ end
 --   the calendar, -1 for the game's own until a reload, also after a profile reset).
 local function SelectShown(row, option, values)
     local value = option:Get()
-    if values[1] == nil or IsChoice(values, value) or option.Placeholder or option.Confirm then
+    if value == nil or values[1] == nil or IsChoice(values, value) or option.Placeholder or option.Confirm then
         row.Repaired = false
         return value
     end
@@ -346,8 +357,7 @@ local function SelectShown(row, option, values)
     if hasDefault then shown = default end
     if not (row.Repaired == true and row.RepairedFrom == value) then
         row.Repaired, row.RepairedFrom = true, value
-        option:Set(shown)
-        ChangedQuietly(row, option)
+        if Protected(option.Set, option, shown) then ChangedQuietly(row, option) end
     end
     return shown
 end
@@ -431,8 +441,13 @@ local optionTypes = {
         Init = function(row)
             row.Input:Show()
         end,
+        -- A box with the focus keeps what is typed in it, and shows a change made elsewhere (a reset, Defaults)
         Refresh = function(row, option, disabled)
-            if not row.Input:HasFocus() then row.Input:SetText(InputText(option:Get())) end
+            local text = InputText(option:Get())
+            if not row.Input:HasFocus() or text ~= row.InputStart then
+                row.Input:SetText(text)
+                row.InputStart = text
+            end
             row.Input:SetEnabled(not disabled)
         end,
     },
@@ -470,7 +485,7 @@ function OptionRowMixin:Init(element, window)
     for _, control in ipairs({ self.Toggle, self.Range, self.Select, self.Execute, self.Input, self.Key1, self.Key2 }) do
         control:Hide()
     end
-    self.InputKept, self.Repaired = false, false
+    self.InputKept, self.InputStart, self.Repaired = false, false, false
     self.Element, self.Window, self.Option = element, window, element.Option
     local option = self.Option
     -- With only on a toggle (the contract): a slider's or a button's own control always sets its own option

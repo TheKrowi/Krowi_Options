@@ -11,6 +11,12 @@ All notable changes to this project will be documented in this file.
 - `CreateWindow` refuses a config with a missing or wrong field, and the error names it
 - The window's place, size, help pane and search ticks are kept in each addon's `saved.Window` with the time of the change, and the window opens from the newest, so the addons agree again after one of them was off for a while
 - The headers of `Krowi_Options.lua` and `RowMixins.lua` describe the whole API: the config, the element kinds, the option interface and what is public
+- A text box saves what is typed when it loses focus, as Enter does; Escape puts the saved text back
+- A dropdown whose saved value is no longer one of its choices shows its default and saves it
+- `With` only goes with a toggle: beside a slider or a button it is ignored
+- A tab-list row without `Show` can name itself with `Name`
+- A tab without a saved table errors at the addon's own `Open` or `Toggle` line
+- Dropdowns no longer rebuild their menu on every refresh, and the rows allocate less when the page refreshes
 
 ### Fixed
 - An addon's error in `OnCreated`, `OnSectionShown`, `GetElements`, an option's label or hidden check, or `GetHelp` goes to the error handler and no longer breaks the window, the search or the other addons' tabs
@@ -24,6 +30,15 @@ All notable changes to this project will be documented in this file.
 - The search no longer freezes the game on an option that is its own parent
 - A section without elements shows an empty page instead of an error
 - An option that errors no longer stops the other rows and the changed count from updating
+- The undo arrow lights the reload bar when the control next to it needs a reload
+- A question asked on the Overview can be answered
+- A slider without a step reaches every value, and a slider whose ends are the same no longer errors
+- A saved value of the wrong type no longer reaches a slider or a text box
+- A page shows a link's detail, a tab's position and a card's text again after they change
+- Closing the window during a search no longer opens the section again on the hidden window
+- The search no longer finds colour names, hyperlink data or hidden codes
+- A section whose `GetElements` errors no longer becomes the open section
+- A window left open after its last tab went away closes
 
 ## 1.0 - 2026-11-04
 ### Added
