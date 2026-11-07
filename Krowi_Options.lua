@@ -90,7 +90,9 @@ lib.Markup = {
     ResetSection(id) Defaults' Yes: sets the section's options back to their defaults; true when one of them needs a
                     reload, which lights the reload bar. Default: sets nothing back and lights no reload bar.
     ChangedCount(id) how many of the section's options differ from their defaults, shown beside Defaults, which is greyed
-                    out at 0. Default: 0.
+                    out at 0. Default: 0. ResetSection and ChangedCount work as a pair: leave out both or give both. With
+                    only ChangedCount, Defaults is enabled and its Yes sets nothing back; with only ResetSection,
+                    Defaults stays greyed out and never runs it.
     OnCreated(frame) called once per tab: when the window is made, or when the tab registers after that. frame.Lightbox
                     is the enlarged help picture, which the addon's Escape handling closes like a window. Default: not
                     called.
