@@ -116,6 +116,11 @@ local function LoadedWindow(lib, fields)
     return window, box, hooks
 end
 
+-- An error's message without the chunk and line it was raised at ([string "Kinds.lua"]:126: )
+local function ErrorText(message)
+    return (tostring(message):gsub('^%[string ".-"%]:%d+: ', ""))
+end
+
 -- [[ B1: the undo arrow and a paired control that needs a reload ]] --
 Scenario("B1", "the undo arrow resets the paired control but its reload does not light the reload bar", {
     Observe = function()
@@ -586,4 +591,186 @@ Scenario("B16g", "a config with a misspelled key (OnSectionShow) is accepted sil
     end,
     Recorded = "accepted silently",
     Target = "an error naming the tab and the key",
+})
+
+-- [[ B17: a select row's menu made again on every refresh ]] --
+-- GenerateMenu runs the row's menu generator again, which makes two closures per choice. The game's dropdown shows a new
+-- value without it: DropdownButtonMixin:Update (Blizzard_Menu/DropdownButton.lua) reads the selected radio again from the
+-- menu already made.
+Scenario("B17", "a select row makes its menu again, two closures per choice, on every refresh, also when nothing changed", {
+    Observe = function()
+        local lib = LoadCopy()
+        local row = OptionRow(lib)
+        local option = Option("Profile", { Type = "select", GetValues = function() return { { "a", "Alpha" }, { "b", "Beta" } } end,
+            Get = function() return "a" end })
+        row:Init({ Kind = "Option", Option = option }, RowWindow(lib))
+        local dropdown = row.Select.Dropdown
+        local setup, generated = #CallsTo(dropdown, "SetupMenu"), #CallsTo(dropdown, "GenerateMenu")
+        for _ = 1, 3 do row:Refresh() end
+        return ("3 refreshes of an unchanged select: SetupMenu %d time(s), GenerateMenu %d time(s)"):format(
+            #CallsTo(dropdown, "SetupMenu") - setup, #CallsTo(dropdown, "GenerateMenu") - generated)
+    end,
+    Recorded = "3 refreshes of an unchanged select: SetupMenu 0 time(s), GenerateMenu 3 time(s)",
+    Target = "3 refreshes of an unchanged select: SetupMenu 0 time(s), GenerateMenu 0 time(s)",
+})
+
+-- [[ B18: what the page's signature leaves out (wider than B4) ]] --
+-- Two pages that differ in one field only, each signed by the real FillPage. The same signature keeps the rows drawn
+-- after a change, and a card row has no Refresh, a grid row refreshes the cells of the element it was drawn with.
+local function Signatures(first, second)
+    local lib = LoadCopy()
+    local function Sign(elements)
+        local window = Window(lib, { Saved = {}, SectionId = "first", Config = Config({ GetElements = function() return elements end }) })
+        window:FillPage(ScrollBoxConstants.DiscardScrollPosition)
+        return window.Signature
+    end
+    return Sign(first) == Sign(second) and "the same signature" or "different signatures"
+end
+
+local function CardPage(text, isNew)
+    return { { Kind = "Cards", Cards = { { Name = "Window", Text = text, IsNew = isNew } } } }
+end
+
+local function GridPage(cell)
+    return { { Kind = "Grid", Columns = { "Spring" }, Rows = { { Label = "Market day", Cells = { cell } } } } }
+end
+
+Scenario("B18a", "two pages that differ only in a card's Text have the same signature", {
+    Observe = function()
+        return Signatures(CardPage("Size and place", false), CardPage("Size, place and look", false))
+    end,
+    Recorded = "the same signature",
+    Target = "different signatures",
+})
+
+Scenario("B18b", "two pages that differ only in a card's IsNew have the same signature", {
+    Observe = function()
+        return Signatures(CardPage("Size and place", false), CardPage("Size and place", true))
+    end,
+    Recorded = "the same signature",
+    Target = "different signatures",
+})
+
+Scenario("B18c", "two pages that differ only in a grid row's Cells have the same signature", {
+    Observe = function()
+        return Signatures(GridPage(Option("Spring market", { Id = "spring" })), GridPage(Option("Summer market", { Id = "summer" })))
+    end,
+    Recorded = "the same signature",
+    Target = "different signatures",
+})
+
+-- [[ B19: Escape in an input box whose saved value is a table ]] --
+-- The box has the focus, as it has when Escape is pressed, so the row's refresh leaves its text alone (B11b is that path)
+Scenario("B19", "Escape in an input box whose saved value is a table passes it to the edit box", {
+    Observe = function()
+        local lib = LoadCopy()
+        local row = OptionRow(lib)
+        row.Input.HasFocus = function() return true end
+        local option = Option("Name", { Type = "input", Get = function() return {} end })
+        row:Init({ Kind = "Option", Option = option }, RowWindow(lib))
+        ScriptOf(row.Input, "OnEscapePressed")(row.Input)
+        local set = CallsTo(row.Input, "SetText")
+        return "Escape gives the edit box a " .. (set[#set] and type(set[#set][1]) or "nothing")
+    end,
+    Recorded = "Escape gives the edit box a table",
+    Target = "Escape gives the edit box a string",
+})
+
+-- [[ B20: hyperlinks and |K codes in the search ]] --
+-- What the player reads of |Hitem:1:0|h[Name]|h is [Name]; a |Kq1|k shows a name the search cannot read. Neither the
+-- link's data nor the code is text the player sees.
+Scenario("B20", "the search finds a hyperlink's data and a |K code's letters", {
+    Observe = function()
+        local lib = LoadCopy()
+        lib.CreateWindow(Config({ GetElements = function()
+            return { { Kind = "Option", Option = Option("|Hitem:1:0|h[Name]|h |Kq1|k") } }
+        end }))
+        local function Found(text)
+            local result = Internal(lib).Search(text, true, nil, false)
+            return result[1] and #result[1].Sections[1].Rows or 0
+        end
+        return ("item finds %d row(s), kq1 %d, name %d"):format(Found("item"), Found("kq1"), Found("name"))
+    end,
+    Recorded = "item finds 1 row(s), kq1 1, name 1",
+    Target = "item finds 0 row(s), kq1 0, name 1",
+})
+
+-- [[ B21: a tab-list item without Show ]] --
+-- The contract (RowMixins.lua's header) gives such an item no name; Target assumes an optional Name, the text the row
+-- draws, and without one nothing, as every other text of the rows falls back to "" (Text, Detail, Source)
+Scenario("B21", "a tab-list item without Show draws ? as its name", {
+    Observe = function()
+        local lib = LoadCopy()
+        local window = Window(lib, { Saved = {}, SectionId = "first", Config = Config({ GetElements = function()
+            return { { Kind = "TabList", Items = { { Position = 1, Name = "Achievements", Source = "Blizzard" }, { Position = 2 } } } }
+        end }) })
+        window.PageScrollBox = DrawingPage(lib, window)
+        window:FillPage(ScrollBoxConstants.DiscardScrollPosition)
+        local frames = window.PageScrollBox.Frames
+        return ('with a Name "%s", without "%s"'):format(tostring(rawget(frames[1].Row.Label, "Shown")),
+            tostring(rawget(frames[2].Row.Label, "Shown")))
+    end,
+    Recorded = 'with a Name "?", without "?"',
+    Target = 'with a Name "Achievements", without ""',
+})
+
+-- [[ B22: ScrollToOption and the options that are not an option row's ]] --
+-- RowMixins.lua's header calls a grid's check boxes and a tab list's Show options too, each with its Id
+Scenario("B22", "ScrollToOption finds neither a tab's Show nor a grid cell", {
+    Observe = function()
+        local lib = LoadCopy()
+        local scrolled
+        local window = Window(lib, { Saved = {}, SectionId = "first", ScrollToOption = Internal(lib).Mixins.Window.ScrollToOption,
+            PageScrollBox = { SetDataProvider = Noop, ScrollToElementData = function(_, element) scrolled = element end },
+            Config = Config({ GetElements = function()
+                return {
+                    { Kind = "Option", Option = Option("Scale", { Id = "scale" }) },
+                    { Kind = "TabList", Items = { { Position = 1, Show = Option("Achievements", { Id = "tab" }) } } },
+                    { Kind = "Grid", Columns = { "Spring" }, Rows = { { Label = "Market day", Cells = { Option("Spring market", { Id = "cell" }) } } } },
+                }
+            end }) })
+        window:FillPage(ScrollBoxConstants.DiscardScrollPosition)
+        local function Find(id)
+            scrolled = nil
+            window:ScrollToOption(id)
+            return scrolled and scrolled.Kind or "none"
+        end
+        return ("an option row's option: %s, a tab's Show: %s, a grid cell: %s"):format(Find("scale"), Find("tab"), Find("cell"))
+    end,
+    Recorded = "an option row's option: Option, a tab's Show: none, a grid cell: none",
+    Target = "an option row's option: Option, a tab's Show: TabRow, a grid cell: GridRow",
+})
+
+-- [[ B23: a TabRow element without Item in the search ]] --
+-- The TabRow kind's Options guards a missing Item (Kinds.lua), its Names does not; the search leaves the section out
+Scenario("B23", "a section with a TabRow element without Item errors in the search and is left out", {
+    Observe = function()
+        local lib = LoadCopy()
+        lib.CreateWindow(Config({ GetElements = function()
+            return { { Kind = "TabRow" }, { Kind = "Option", Option = Option("Bright") } }
+        end }))
+        local result = Internal(lib).Search("bright", true, nil, false)
+        local rows = result[1] and #result[1].Sections[1].Rows or 0
+        return ("the search finds %d row(s), %d error(s) to the handler%s"):format(rows, #handled,
+            handled[1] and (": " .. ErrorText(handled[1])) or "")
+    end,
+    Recorded = "the search finds 0 row(s), 1 error(s) to the handler: attempt to index field 'Item' (a nil value)",
+    Target = "the search finds 1 row(s), 0 error(s) to the handler",
+})
+
+-- [[ B24: a key button's scripts on a row that is not a key option's ]] --
+-- Unreachable in game, where the key buttons of such a row are hidden: a click starts a capture, the next key sets it
+Scenario("B24", "a hidden key button fired on a toggle's row errors on Slots", {
+    Observe = function()
+        local lib = LoadCopy()
+        local row = OptionRow(lib)
+        InCombatLockdown = function() return false end
+        IsAltKeyDown, IsControlKeyDown, IsShiftKeyDown = Noop, Noop, Noop
+        row:Init({ Kind = "Option", Option = Option("Show the bar") }, RowWindow(lib, { OnOptionChanged = Noop }))
+        ScriptOf(row.Key1, "OnClick")()
+        local ok, message = pcall(ScriptOf(row.Key1, "OnKeyDown"), row.Key1, "A")
+        return ok and "no error" or ("error: " .. ErrorText(message))
+    end,
+    Recorded = "error: attempt to index field 'Slots' (a nil value)",
+    Target = "no error",
 })

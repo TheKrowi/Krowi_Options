@@ -24,3 +24,4 @@ Class: harness
 | 2026-11-07 | design | Phase 3: a select whose saved value is no longer one of its choices (B12) | the saved value's own text, nothing saved | "The default and update the saved var. Keeping things shown that no longer exist and work makes no sence" | own |
 | 2026-11-07 | design | Phase 3: a section whose GetElements errors (B14b, B14c) | the previous section stays current, OnSectionShown not run for the broken one | "Yes, previous section stays current (Recommended)" | took |
 | 2026-11-07 | scope | Phase 3: the extra defects found by the scenarios' author and the structure move | all of them | "All of them (Recommended)" | took |
+| 2026-11-07 | plan | Phase 3: the plan (fix list by file, three Opus hand-offs, test addon steps, proof) | approve | plan approved at ExitPlanMode with no changes | took |
