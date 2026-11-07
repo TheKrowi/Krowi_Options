@@ -11,6 +11,9 @@
 -- the window's own functions, names itself in a banner over the window, checks what the window shows and takes a
 -- screenshot, which Read-GameTests.ps1 pairs with its file. The scenarios (Scenarios.lua) run first.
 --   open: the tab's Open opens the window where Landing says (the first open after a /reload also builds it)
+--   public: the public surface no scenario covers, through the public names only: the tab's IsShown and GetFrame (the
+--     frame lib.WindowName names), Toggle (hides, then shows again on the tab), Refresh (shown, and hidden: nothing),
+--     lib.Markup's three texts and OnCreated's frame with its Lightbox
 --   library-globals-window: with the window made, no global but its name and the children Blizzard's templates name
 --     after it (docs/work/2026-11-05-contract-and-errors)
 --   tabs: a tab per addon that registered with the window, the fixture's selected, under the game's Options title
@@ -1443,6 +1446,127 @@ local function GreyedHoverSteps()
     return list
 end
 
+-- The public surface that no scenario and no other step covers (Krowi, 2026-11-07: the library validates itself, its
+-- internals and its public surface; no consumer's suite does it for it), read through the public names only, never
+-- lib.Internal: the fixture's tab object (fixtures.Tab), lib.WindowName and lib.Markup. On the window the open step
+-- opened on the fixture's tab, six checks, a line each, numbered: 1 the tab's IsShown; 2 its GetFrame is the frame the
+-- global lib.WindowName names, shown as IsShown says; 3 Toggle hides the window and a second Toggle shows it again on
+-- this tab; 4 Refresh runs while the window is shown, and while it is hidden does nothing; 5 lib.Markup's Changed,
+-- Reload and Reset are texts; 6 OnCreated ran once for the tab with that frame (Fixtures.lua counts its calls in
+-- fixtures.Created and keeps the frame in fixtures.Frame), which carries its Lightbox. Every call of the library runs in
+-- a pcall, so its error is that check's FAIL and the run goes on. Each half after the first Toggle starts from a hidden
+-- window, hidden through the frame's own Hide when the call before left it shown, so one fault fails one check; a window
+-- the toggles left hidden is opened again through the tab's Open for the steps after. No mouse and no wait: it runs
+-- unattended in smoke.
+local function PublicStep()
+    local seen
+    -- The error a call raised, or nil when it ran
+    local function Try(func, ...)
+        local ok, err = pcall(func, ...)
+        return not ok and tostring(err) or nil
+    end
+    local function Named(frame)
+        if frame == nil then return "nothing" end
+        return type(frame) == "table" and frame.GetName and frame:GetName() or tostring(frame)
+    end
+    local function Raised(err, otherwise)
+        return err and ("raised: " .. err) or otherwise
+    end
+    return {
+        Name = "public",
+        Needs = "open",
+        Text = "a tab's public methods, lib.Markup and OnCreated's frame",
+        Run = function()
+            local lib, tab = Lib(), fixtures.Tab
+            local global = type(lib.WindowName) == "string" and _G[lib.WindowName] or nil
+            local function FrameShown() return global ~= nil and global:IsShown() and true or false end
+            local function IsHidden() return not tab:IsShown() and not FrameShown() end
+            -- A window a call left shown, hidden through its frame for the next half
+            local function HideByFrame()
+                if global ~= nil and not IsHidden() then global:Hide() end
+            end
+            seen = { Global = global }
+            -- 1 and 2: as the open step left the window
+            seen.Shown = tab:IsShown()
+            seen.GetFrame = Try(function() seen.Frame = tab:GetFrame() end)
+            seen.FrameShown = seen.Frame ~= nil and seen.Frame:IsShown() and true or false
+            -- 4, shown: the page drawn again
+            seen.RefreshShown = Try(tab.Refresh, tab)
+            -- 3: the first Toggle hides the window
+            seen.Hide = Try(tab.Toggle, tab)
+            seen.HiddenTab, seen.HiddenFrame = tab:IsShown(), FrameShown()
+            seen.WasHidden = not seen.HiddenTab and not seen.HiddenFrame
+            HideByFrame()
+            -- 4, hidden: nothing happens, the window stays hidden
+            seen.TriedHidden = IsHidden()
+            if seen.TriedHidden then
+                seen.RefreshHidden = Try(tab.Refresh, tab)
+                seen.StaysHidden = IsHidden()
+                HideByFrame()
+            end
+            -- 3: the second Toggle shows it again on this tab
+            seen.HiddenBefore = IsHidden()
+            seen.Show = Try(tab.Toggle, tab)
+            seen.AgainTab, seen.AgainFrame = tab:IsShown(), FrameShown()
+            -- Left shown for the steps after, whatever the toggles did
+            if not tab:IsShown() then
+                seen.Reopen = Try(tab.Open, tab) or false
+            end
+        end,
+        Check = function()
+            local lib, tab = Lib(), fixtures.Tab
+            local frame = seen.Frame
+            -- 1
+            Add(seen.Shown == true and "PASS" or "FAIL", ("1 IsShown: with the window open on the fixture's tab, the tab's IsShown() is %s"):format(
+                tostring(seen.Shown)))
+            -- 2
+            local same = frame ~= nil and frame == seen.Global
+            local agrees = seen.FrameShown == seen.Shown
+            Add(not seen.GetFrame and same and agrees and "PASS" or "FAIL", ("2 GetFrame: %s%s"):format(
+                Raised(seen.GetFrame, same and ("returns the window, _G[\"%s\"]"):format(tostring(lib.WindowName))
+                    or ("returns %s, not _G[\"%s\"] (%s)"):format(Named(frame), tostring(lib.WindowName), Named(seen.Global))),
+                frame == nil and "" or ("; the frame is %s, the tab's IsShown() %s"):format(seen.FrameShown and "shown" or "hidden",
+                    agrees and "agrees" or ("says " .. tostring(seen.Shown)))))
+            -- 3
+            local hid = not seen.Hide and seen.WasHidden
+            local back = not seen.Show and seen.HiddenBefore and seen.AgainTab == true and seen.AgainFrame
+            local left = tab:IsShown()
+            Add(hid and back and left and "PASS" or "FAIL", ("3 Toggle: the first %s (IsShown() %s, the frame %s), the second %s (IsShown() %s, the frame %s); at the check the window is %s%s"):format(
+                Raised(seen.Hide, hid and "hides the window" or "leaves the window shown"), tostring(seen.HiddenTab), seen.HiddenFrame and "shown" or "hidden",
+                Raised(seen.Show, not seen.HiddenBefore and "had no hidden window to show (its frame's Hide did not hide it)"
+                    or back and "shows it again on this tab" or "does not show it on this tab"), tostring(seen.AgainTab), seen.AgainFrame and "shown" or "hidden",
+                left and "shown on the tab" or "not shown on the tab",
+                seen.Reopen == nil and "" or (", opened again through Open" .. (seen.Reopen and (", which raised: " .. seen.Reopen) or ""))))
+            -- 4
+            local hiddenPart = not seen.TriedHidden and "was not tried: the window could not be hidden"
+                or Raised(seen.RefreshHidden, seen.StaysHidden and "does nothing, the window stays hidden" or "shows the window")
+            local status = (seen.RefreshShown or seen.TriedHidden and (seen.RefreshHidden or not seen.StaysHidden)) and "FAIL"
+                or not seen.TriedHidden and "SKIP" or "PASS"
+            Add(status, ("4 Refresh: while shown it %s; while hidden it %s%s"):format(Raised(seen.RefreshShown, "runs"), hiddenPart,
+                seen.TriedHidden and not seen.WasHidden and " (hidden through its frame: the first Toggle did not hide it)" or ""))
+            -- 5
+            local markup = lib.Markup
+            local notText = {}
+            for _, key in ipairs({ "Changed", "Reload", "Reset" }) do
+                local text = type(markup) == "table" and markup[key] or nil
+                if type(text) ~= "string" or text == "" then tinsert(notText, key) end
+            end
+            Add(type(markup) == "table" and #notText == 0 and "PASS" or "FAIL", ("5 Markup: %s"):format(type(markup) ~= "table" and "lib.Markup is no table"
+                or #notText == 0 and "Changed, Reload and Reset are texts" or ("no text in " .. table.concat(notText, ", "))))
+            -- 6
+            local kept = fixtures.Frame
+            local lightbox = type(kept) == "table" and kept.Lightbox or nil
+            local isFrame = type(lightbox) == "table" and type(lightbox.IsObjectType) == "function" and lightbox:IsObjectType("Frame")
+            local created = fixtures.Created or 0
+            local ok = created == 1 and frame ~= nil and kept == frame and isFrame
+            Add(ok and "PASS" or "FAIL", ("6 OnCreated: called %s for the fixture's tab, with %s, whose Lightbox is %s"):format(
+                created == 1 and "once" or (created .. " times"),
+                kept == nil and "no frame" or kept == frame and "the frame the tab's GetFrame() returns" or ("%s, not what the tab's GetFrame() returns (%s)"):format(Named(kept), Named(frame)),
+                isFrame and ("a " .. lightbox:GetObjectType()) or lightbox == nil and "missing" or "no frame"))
+        end
+    }
+end
+
 local function BuildSteps()
     local list = {
         {
@@ -1464,6 +1588,7 @@ local function BuildSteps()
                     tostring(frame and frame.SectionId), live.Landing, live.FirstOpen and "yes" or "no"))
             end
         },
+        PublicStep(),
         {
             -- With the window made: the globals Blizzard's templates add under the window's name ($parent), which the
             -- load-time scenario library-globals cannot see (docs/work/2026-11-05-contract-and-errors)
@@ -1872,10 +1997,11 @@ function steps.IsRunning()
 end
 
 -- The named sets of steps, for Krowi_ClaudeKit's two-copy release gate, whose mixed cases need no full run (Krowi,
--- 2026-11-05: the full run with equal copies, a short one elsewhere): smoke opens the window, shows its tabs, changes a
--- check box, searches, collapses the pane and closes; behaviour is every step but the walk through the sections, keeping
--- the two sections whose rows are of their own kind (the tab list and the keys)
-local smokeSteps = { open = true, ["library-globals-window"] = true, tabs = true, toggle = true, search = true, pane = true, close = true }
+-- 2026-11-05: the full run with equal copies, a short one elsewhere): smoke opens the window, checks the public surface,
+-- shows its tabs, changes a check box, searches, collapses the pane and closes; behaviour is every step but the walk
+-- through the sections, keeping the two sections whose rows are of their own kind (the tab list and the keys)
+local smokeSteps = { open = true, public = true, ["library-globals-window"] = true, tabs = true, toggle = true, search = true, pane = true,
+    close = true }
 local keptSections = { ["section-tabs"] = true, ["section-keys"] = true }
 local stepSets = {
     smoke = function(step) return smokeSteps[step.Name] end,
