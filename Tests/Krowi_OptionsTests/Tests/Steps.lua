@@ -1344,7 +1344,22 @@ end
 -- The session's Lua errors that name the library or this addon, also from before the run (the window's first draw)
 local function CheckErrors()
     if not (BugGrabber and type(BugGrabber.GetDB) == "function" and type(BugGrabber.GetSessionId) == "function") then
-        tinsert(live.Observations, "no BugGrabber, so Lua errors are not checked")
+        -- No BugGrabber: the messages ErrorLog.lua kept since this addon began to load
+        local log = tests.ErrorLog
+        if not (log and log.Installed) then
+            tinsert(live.Observations, "no BugGrabber and no error log, so Lua errors are not checked")
+            return
+        end
+        local found = 0
+        for _, message in ipairs(log) do
+            if message:find(errorPattern, 1, true) then
+                found = found + 1
+                Add("FAIL", ("Lua error: %s"):format(message:sub(1, 300)))
+            end
+        end
+        if found == 0 then
+            Add("PASS", ("no Lua error naming %s this session (the error handler, %d error(s) in all)"):format(errorPattern, #log))
+        end
         return
     end
     local session = BugGrabber:GetSessionId()
@@ -1419,8 +1434,34 @@ local function Restore()
     return notBack
 end
 
+-- Every atlas the library draws (RowFrames.lua, WindowPage.lua, WindowFrame.lua, WindowLayout.lua, and the undo arrow's
+-- markup in Krowi_Options.lua), asked of this client's own game data (docs/work/2026-11-05-review-fixes, backlog #17): one
+-- the client does not have draws nothing there
+local libraryAtlases = { "checkbox-minimal", "checkmark-minimal", "checkmark-minimal-disabled", "common-dropdown-icon-next",
+    "common-dropdown-icon-next-disabled", "common-dropdown-icon-back", "common-dropdown-icon-back-disabled", "common-icon-undo",
+    "Options_List_Active", "Options_List_Hover", "Options_CategoryHeader_1", "Options_CategoryHeader_2",
+    "Options_CategoryHeader_3", "Options_HorizontalDivider", "Options_InnerFrame" }
+
+local function CheckAtlases()
+    local missing = {}
+    for _, name in ipairs(libraryAtlases) do
+        if not C_Texture.GetAtlasInfo(name) then missing[#missing + 1] = name end
+    end
+    if #missing == 0 then
+        Add("PASS", ("the client has all %d atlases the library draws"):format(#libraryAtlases))
+    else
+        Add("FAIL", ("the client lacks %d of the %d atlases the library draws: %s"):format(#missing, #libraryAtlases,
+            table.concat(missing, ", ")))
+    end
+end
+
 local function Finish()
     banner:UnregisterAllEvents()
+    live.StepName = "atlases"
+    local atlasesChecked, atlasErr = pcall(CheckAtlases)
+    if not atlasesChecked then
+        Add("FAIL", "test error: " .. tostring(atlasErr))
+    end
     live.StepName = "restore"
     local ok, notBack = pcall(Restore)
     if not ok then

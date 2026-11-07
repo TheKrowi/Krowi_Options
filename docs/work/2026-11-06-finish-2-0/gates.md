@@ -31,4 +31,5 @@ Class: harness
 | 2026-11-07 | intent | Phase 4: the config contract (five required fields, defaults for six, unknown key an error, library only, no paired KAF pull request) | accept | "Accept the intent (Recommended)" | took |
 | 2026-11-07 | design | Phase 4: a config that gives ResetSection or ChangedCount but not both | refuse one without the other | "Refuse one without the other (Recommended)" | took |
 | 2026-11-07 | merge | Phase 4: Krowi_Options #8 (with the pair rule applied first, rechecked in game on Retail and Mists) | merge | "Merge (Recommended)" | took |
+| 2026-11-07 | plan | Phase 5: the plan (probe Forever, Era, Anniversary; fix findings; the four game-only items; KAF's suites; the two-copy gate with a kit pull request) | approve | plan approved at ExitPlanMode with no changes | took |
 | 2026-11-07 | intent | Phase 5: in game on every client (Forever, Era, Anniversary, then the four game-only items, KAF's suites, the two-copy gate with its entry updated and extended by the library's test addon as a kit pull request, BugGrabber clean) | accept | "Accept the intent (Recommended)" | took |
