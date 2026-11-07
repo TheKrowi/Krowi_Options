@@ -28,10 +28,12 @@ local function Protected(func, ...)
     return xpcall(function() return func(unpack(args, 1, count)) end, CallErrorHandler)
 end
 
--- The text a player reads, in capitals: icons and colour codes left out, so a search for "clock" or a colour's hex
--- digits finds nothing it does not show
+-- The text a player reads, in capitals: icons, colour codes (Retail's named ones, |cnNAME:, too), a link's data (its
+-- shown text stays) and |K codes left out, so a search for "clock", a colour's hex digits or name, or a link's id finds
+-- nothing it does not show
 local function Plain(text)
-    return (text:gsub("|A.-|a", ""):gsub("|T.-|t", ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):upper())
+    return (text:gsub("|A.-|a", ""):gsub("|T.-|t", ""):gsub("|K.-|k", ""):gsub("|H.-|h(.-)|h", "%1"):gsub("|cn[%w_]*:", "")
+        :gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):upper())
 end
 
 local function Texts(...)

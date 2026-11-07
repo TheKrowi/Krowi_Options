@@ -135,7 +135,7 @@ Scenario("B1", "the undo arrow resets the paired control but its reload does not
         ScriptOf(row.Reset, "OnClick")()
         return ("Scale reset %s, reload bar %s"):format(withReset and "yes" or "no", window.ReloadPending and "lit" or "not lit")
     end,
-    Recorded = "Scale reset yes, reload bar not lit",
+    Recorded = "Scale reset yes, reload bar lit",
     Target = "Scale reset yes, reload bar lit",
 })
 
@@ -151,7 +151,7 @@ Scenario("B2", "a question asked on the Overview hides its Yes (the Defaults but
         window:AskConfirm("Delete the profile?", Noop) -- a select on the Overview with Confirm asks this
         return ("Yes %s, No %s"):format(shown.Defaults and "shown" or "hidden", shown.Cancel and "shown" or "hidden")
     end,
-    Recorded = "Yes hidden, No shown",
+    Recorded = "Yes shown, No shown",
     Target = "Yes shown, No shown",
 })
 
@@ -202,7 +202,7 @@ Scenario("B4a", "after a change a link keeps its old Detail when the page's rows
         window:OnOptionChanged(Option("Changed"))
         return "the link shows " .. tostring(rawget(window.PageScrollBox.Frames[1].Row.Detail, "Shown"))
     end,
-    Recorded = "the link shows 1 profile",
+    Recorded = "the link shows 2 profiles",
     Target = "the link shows 2 profiles",
 })
 
@@ -220,7 +220,7 @@ Scenario("B4b", "after a change a tab row keeps its old Position when the page's
         window:OnOptionChanged(show)
         return "the tab row shows position " .. tostring(rawget(window.PageScrollBox.Frames[1].Row.Position, "Shown"))
     end,
-    Recorded = "the tab row shows position 1",
+    Recorded = "the tab row shows position 2",
     Target = "the tab row shows position 2",
 })
 
@@ -281,7 +281,7 @@ Scenario("B6", "closing the window during a search shows the section again on th
         end
         return table.concat(lines, "; ")
     end,
-    Recorded = "window first: OnSectionShown 1, GetElements 1; box first: OnSectionShown 1, GetElements 1",
+    Recorded = "window first: OnSectionShown 0, GetElements 0; box first: OnSectionShown 0, GetElements 0",
     Target = "window first: OnSectionShown 0, GetElements 0; box first: OnSectionShown 0, GetElements 0",
 })
 
@@ -298,7 +298,7 @@ Scenario("B7", "the search finds the name inside a named colour code (|cnHIGHLIG
         end
         return ("highlight finds %d row(s), bright %d"):format(Found("highlight"), Found("bright"))
     end,
-    Recorded = "highlight finds 1 row(s), bright 1",
+    Recorded = "highlight finds 0 row(s), bright 1",
     Target = "highlight finds 0 row(s), bright 1",
 })
 
@@ -468,7 +468,7 @@ Scenario("B14b", "a section whose GetElements errors becomes the window's Sectio
         local window = BrokenSection()
         return "SectionId " .. tostring(window.SectionId)
     end,
-    Recorded = "SectionId broken",
+    Recorded = "SectionId first",
     Target = "SectionId first",
 })
 
@@ -477,7 +477,7 @@ Scenario("B14c", "a section whose GetElements errors has had its OnSectionShown"
         local _, shownFor = BrokenSection()
         return #shownFor > 0 and ("OnSectionShown ran for " .. table.concat(shownFor, ", ")) or "OnSectionShown did not run"
     end,
-    Recorded = "OnSectionShown ran for broken",
+    Recorded = "OnSectionShown did not run",
     Target = "OnSectionShown did not run",
 })
 
@@ -639,7 +639,7 @@ Scenario("B18a", "two pages that differ only in a card's Text have the same sign
     Observe = function()
         return Signatures(CardPage("Size and place", false), CardPage("Size, place and look", false))
     end,
-    Recorded = "the same signature",
+    Recorded = "different signatures",
     Target = "different signatures",
 })
 
@@ -647,7 +647,7 @@ Scenario("B18b", "two pages that differ only in a card's IsNew have the same sig
     Observe = function()
         return Signatures(CardPage("Size and place", false), CardPage("Size and place", true))
     end,
-    Recorded = "the same signature",
+    Recorded = "different signatures",
     Target = "different signatures",
 })
 
@@ -655,7 +655,7 @@ Scenario("B18c", "two pages that differ only in a grid row's Cells have the same
     Observe = function()
         return Signatures(GridPage(Option("Spring market", { Id = "spring" })), GridPage(Option("Summer market", { Id = "summer" })))
     end,
-    Recorded = "the same signature",
+    Recorded = "different signatures",
     Target = "different signatures",
 })
 
@@ -691,7 +691,7 @@ Scenario("B20", "the search finds a hyperlink's data and a |K code's letters", {
         end
         return ("item finds %d row(s), kq1 %d, name %d"):format(Found("item"), Found("kq1"), Found("name"))
     end,
-    Recorded = "item finds 1 row(s), kq1 1, name 1",
+    Recorded = "item finds 0 row(s), kq1 0, name 1",
     Target = "item finds 0 row(s), kq1 0, name 1",
 })
 
@@ -737,7 +737,7 @@ Scenario("B22", "ScrollToOption finds neither a tab's Show nor a grid cell", {
         end
         return ("an option row's option: %s, a tab's Show: %s, a grid cell: %s"):format(Find("scale"), Find("tab"), Find("cell"))
     end,
-    Recorded = "an option row's option: Option, a tab's Show: none, a grid cell: none",
+    Recorded = "an option row's option: Option, a tab's Show: TabRow, a grid cell: GridRow",
     Target = "an option row's option: Option, a tab's Show: TabRow, a grid cell: GridRow",
 })
 

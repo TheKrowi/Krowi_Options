@@ -121,29 +121,67 @@ local function Flatten(elements)
     return lib.Internal.Flatten(elements, lib.Internal.Kinds)
 end
 
--- keepSearchText: a search ended by emptying the box keeps the spaces left in it
+-- A section's rows and their signature, read from the addon (below)
+local ReadPage
+
+-- Defaults shows on a section's page. The Overview and the search results have none, as the game's: there it shows only
+-- as the Yes of a question asked in them.
+local function DefaultsShown(window, confirming)
+    return confirming ~= nil or not window.Searching and window.SectionId ~= "overview"
+end
+
+-- keepSearchText: a search ended by emptying the box keeps the spaces left in it. A section whose rows cannot be read
+-- (the error went to the handler) does not open: the window stays on the section it shows, drawn again. It opens, empty,
+-- only when no other section is open to stay on (a tab just shown).
 function WindowMixin:ShowSection(id, optionId, keepSearchText)
     local config = self.Config
+    local elements, signature = ReadPage(self, id)
+    if not elements and self.SectionId and self.SectionId ~= id then
+        self:ReloadSection()
+        return
+    end
     self.SectionId = id
     self.Searching = nil
     self.Confirming = nil
     if not keepSearchText and self.SearchBox:GetText() ~= "" then self.SearchBox:SetText("") end
     Protected(config.OnSectionShown, id)
     self.PageTitle:SetText(id == "overview" and self.Strings.Overview or Ask(id, config.SectionName, id))
-    self.DefaultsButton:SetShown(id ~= "overview")
+    self.DefaultsButton:SetShown(DefaultsShown(self))
     -- Each part of the fill on its own, so an addon's error in one leaves the others drawn and the fill always ends
     self.Filling = true
     Protected(self.RefreshNav, self)
     -- Only a page that filled is the last section: one whose elements error is not opened again on the next open
-    local ok, filled = Protected(self.FillPage, self, ScrollBoxConstants.DiscardScrollPosition)
-    if ok and filled then self.Saved.LastSection = id end
+    local ok = Protected(self.FillPage, self, ScrollBoxConstants.DiscardScrollPosition, elements or {}, signature or "")
+    if ok and elements then self.Saved.LastSection = id end
     Protected(self.ShowSectionHelp, self)
     self:EndFill()
     if optionId then self:ScrollToOption(optionId) end
 end
 
+-- An option as the signature has it: its id and name
+local function Signed(option)
+    return (option.Id or "") .. "|" .. option:GetLabel()
+end
+
+-- What a row draws as it is made and its Refresh does not draw again: a link's detail, a tab's position, each card's
+-- line and NEW, a grid row's check boxes (the kind's Cells, Kinds.lua). A change to any of them draws the page again, so
+-- its rows show the new elements.
+local function Drawn(element, kind)
+    local drawn = {}
+    if element.Kind == "Link" then
+        drawn[1] = tostring(element.Detail or "")
+    elseif element.Kind == "TabRow" then
+        drawn[1] = tostring(element.Item and element.Item.Position or "")
+    elseif element.Kind == "CardRow" then
+        for i, card in ipairs(element.Cards or {}) do drawn[i] = tostring(card.Text or "") .. (card.IsNew and " (New)" or "") end
+    elseif kind and kind.Cells then
+        for i, cell in ipairs(kind.Cells(element) or {}) do drawn[i] = Signed(cell) end
+    end
+    return #drawn > 0 and (" [" .. table.concat(drawn, ", ") .. "]") or ""
+end
+
 -- The rows a page shows, to tell after a change whether the same rows stay: each row's kind and the option it stands for
--- with the one beside it while that shows (the kinds' Options, Kinds.lua), or its key or text
+-- with the one beside it while that shows (the kinds' Options, Kinds.lua), or its key or text, and what it draws once
 local function Signature(elements)
     local parts = {}
     for i, element in ipairs(elements) do
@@ -151,16 +189,17 @@ local function Signature(elements)
         local option, with
         if kind and kind.Options then option, with = kind.Options(element) end
         local beside = with and not with:IsHidden() and ("+" .. (with.Id or "")) or "" -- shown with its row
-        parts[i] = element.Kind .. ":" .. (option and ((option.Id or "") .. "|" .. option:GetLabel() .. beside) or tostring(element.Key or element.Text or element.Label or ""))
+        parts[i] = element.Kind .. ":" .. (option and (Signed(option) .. beside) or tostring(element.Key or element.Text or element.Label or ""))
+            .. Drawn(element, kind)
     end
     return table.concat(parts, "\n")
 end
 
--- The open section's rows and their signature, read from the addon: GetElements, and each option's IsHidden (Flatten)
--- and GetLabel (Signature). nil when any of them errors; the error goes to the error handler.
-local function ReadPage(window)
+-- A section's rows and their signature, read from the addon: GetElements, and each option's IsHidden (Flatten) and
+-- GetLabel (Signature). nil when any of them errors; the error goes to the error handler.
+function ReadPage(window, id)
     local ok, elements, signature = Protected(function()
-        local elements = Flatten(window.Config.GetElements(window.SectionId))
+        local elements = Flatten(window.Config.GetElements(id))
         return elements, Signature(elements)
     end)
     if ok then return elements, signature end
@@ -175,7 +214,7 @@ end
 -- page filled; a page whose rows could not be read shows empty.
 function WindowMixin:FillPage(scrollPosition, elements, signature)
     if not elements then
-        elements, signature = ReadPage(self)
+        elements, signature = ReadPage(self, self.SectionId)
     elseif not signature then
         signature = SignatureOf(elements)
     end
@@ -239,8 +278,7 @@ function WindowMixin:RefreshFooter()
         FitButton(self.DefaultsButton)
         self.DefaultsButton:SetEnabled(count > 0)
     end
-    -- The results have no Defaults, as the game's; it shows there only as the Yes of a question asked in them
-    if self.Searching then self.DefaultsButton:SetShown(confirming ~= nil) end
+    self.DefaultsButton:SetShown(DefaultsShown(self, confirming))
     local reload = self.ReloadPending and true or false
     self.ReloadBackground:SetShown(reload)
     self.ReloadText:SetShown(reload)
@@ -248,12 +286,17 @@ function WindowMixin:RefreshFooter()
     self.ReloadButton:SetEnabled(not self:InCombat())
 end
 
+local function NeedsReload(option)
+    return option ~= nil and option.GetNeedsReload ~= nil and option:GetNeedsReload()
+end
+
 -- The rows refresh in place while the page keeps the same rows: rebuilding it re-initialises every row, which ends the
--- drag of a slider that changes its option on every step. Only a change that shows or hides rows rebuilds the page; the
--- search results are found again for that, except after a slider, whose value shows or hides no row, so a drag does not
--- search every section on each step.
-function WindowMixin:OnOptionChanged(option)
-    if option and option.GetNeedsReload and option:GetNeedsReload() then self.ReloadPending = true end
+-- drag of a slider that changes its option on every step. Only a change that shows or hides rows, or changes what a row
+-- draws once (Signature), rebuilds the page; the search results are found again for that, except after a slider, whose
+-- value shows or hides no row, so a drag does not search every section on each step. with: the option beside it on its
+-- row, which the undo arrow sets back with it (RowMixins.lua), so its reload lights the reload bar too.
+function WindowMixin:OnOptionChanged(option, with)
+    if NeedsReload(option) or NeedsReload(with) then self.ReloadPending = true end
     if not self.SectionId or self.Searching and option and option.Type == "range" then
         self:Refresh()
     else
@@ -275,9 +318,24 @@ function WindowMixin:OnOptionChanged(option)
     self:RefreshHover()
 end
 
+-- Whether a row shows the option: as its own or the one beside it (an option row's With, a tab's Show) or as one of a
+-- grid row's check boxes (the kinds' Options and Cells, Kinds.lua)
+local function ShowsOption(element, optionId)
+    local kind = lib.Internal.Kinds[element.Kind]
+    if not kind then return false end
+    if kind.Options then
+        local option, with = kind.Options(element)
+        if option and option.Id == optionId or with and with.Id == optionId then return true end
+    end
+    for _, cell in ipairs(kind.Cells and kind.Cells(element) or {}) do
+        if cell.Id == optionId then return true end
+    end
+    return false
+end
+
 function WindowMixin:ScrollToOption(optionId)
     for _, element in ipairs(self.Elements or {}) do
-        if element.Option and element.Option.Id == optionId or element.With and element.With.Id == optionId then
+        if ShowsOption(element, optionId) then
             self.PageScrollBox:ScrollToElementData(element, ScrollBoxConstants.AlignCenter)
             return
         end

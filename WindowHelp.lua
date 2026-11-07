@@ -70,12 +70,17 @@ end
 lib.Internal.Mixins.Window = lib.Internal.Mixins.Window or {}
 local WindowMixin = lib.Internal.Mixins.Window
 
+-- The pane is lib.Internal.Geometry.HelpWidth wide (Kinds.lua), as the window lays it out (WindowLayout.lua); its text
+-- and pictures are drawn this wide inside it
+local function HelpInnerWidth()
+    return lib.Internal.Geometry.HelpWidth - 52
+end
+
 -- The help pane's list draws its own kinds, in the shape of lib.Internal.Kinds (Kinds.lua): the builder of each row
--- (WindowFrame.lua) and its height. lib.Internal.InitList (Kinds.lua) pools them. The pane is
--- lib.Internal.Geometry.HelpWidth wide (Kinds.lua), as the window lays it out (WindowLayout.lua).
+-- (WindowFrame.lua) and its height. lib.Internal.InitList (Kinds.lua) pools them.
 local helpKinds = {
     HelpText = { Build = "HelpText", Height = function(window, element)
-        return window:MeasureText(element.Text, element.Font, lib.Internal.Geometry.HelpWidth - 52) + (element.Gap or 6)
+        return window:MeasureText(element.Text, element.Font, HelpInnerWidth()) + (element.Gap or 6)
     end },
     HelpPicture = { Build = "HelpPicture", Height = function(_, element) return element.DrawHeight + 10 end },
 }
@@ -143,7 +148,7 @@ function WindowMixin:ShowSectionHelp()
     local blocks = {}
     local title = help and help.Title or (self.SectionId == "overview" and self.Strings.Overview or Ask(self.SectionId, self.Config.SectionName, self.SectionId))
     blocks[#blocks + 1] = TextBlock(title, "GameFontNormalLarge", 10)
-    local innerWidth = lib.Internal.Geometry.HelpWidth - 52
+    local innerWidth = HelpInnerWidth()
     for _, block in ipairs(help and help.Blocks or {}) do
         if block.Picture then
             local width = math.min(block.Width or innerWidth, innerWidth)

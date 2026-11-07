@@ -163,7 +163,7 @@ function OptionRowMixin:OnLoad()
     self.Reset:SetScript("OnClick", function()
         self.Option:Reset()
         if self.With then self.With:Reset() end
-        self.Window:OnOptionChanged(self.Option)
+        self.Window:OnOptionChanged(self.Option, self.With)
     end)
 
     self.Toggle:SetScript("OnClick", function()
