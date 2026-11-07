@@ -11,8 +11,8 @@
        load; at character select it enters the world. A closed one is started (Start-Game.ps1 -Wait, which refuses
        while another client runs: they share one Battle.net account) and enters the world. The game finds a new addon
        folder only when it starts, so the first run after the first deploy into a client needs a client this tool starts.
-    3. /kotest run <entries>, then Send-GameInput.ps1 -WaitForDone: it serves the hover the half-shown row step asks for
-       (toggle-reset-clipped) and returns when the summary is up.
+    3. /kotest run <entries>, then Send-GameInput.ps1 -WaitForDone: it serves the hovers the mouse steps ask for
+       (toggle-reset-clipped, link-highlight, greyed-slider-input) and returns when the summary is up.
     4. /reload, so the results reach the saved variables, then Read-GameTests.ps1 per entry and the kit's
        Read-GameErrors.ps1 for Krowi_Options.
     5. -Quit for a client this tool started, unless -KeepOpen.

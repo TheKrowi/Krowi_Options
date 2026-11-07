@@ -489,6 +489,7 @@ local debugPage = [[
 Header:Output
 Option:debug.verbose|Verbose mode
 Option:debug.trace|Trace calls
+Option:debug.logFile|Log file
 Header:Priority
 Option:debug.tabPriority|Tab priority
 Option:debug.priorityOrder|Priority order

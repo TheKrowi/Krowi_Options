@@ -22,14 +22,19 @@
 --     the footer's count follow it; toggle-reset: the toggle's row shows its arrow on enter, before the name, and the
 --     arrow sets the option back (docs/work/2026-10-31-options-markers); toggle-help-follows: the help pane's Reset to
 --     Default line comes and goes with a change made under the mouse, toggle-help-follows-grid the same on a grid's check
---     box; toggle-reset-clipped, the one step that needs the mouse (the kit's marker serves it, else the player's within
---     30 s): the arrow goes when the mouse leaves a row through its part scrolled out of view
+--     box; toggle-reset-clipped, a step that needs the mouse (the kit's marker serves it, else the player's within 30 s):
+--     the arrow goes when the mouse leaves a row through its part scrolled out of view
 --   undo-reload: the undo arrow of a check box whose slider needs a reload lights the reload bar (Bugs B1)
 --   input-focus-lost: a text box saves its typed text as it loses the focus, and Escape reverts it (Bugs B13)
 --   select-stale: a dropdown whose saved value is no longer a choice shows its default, which is saved (Bugs B12)
 --   slider-help: over a check box's slider the help explains the slider
 --   greyed-help, greyed-help-collapsed: a greyed-out check box, dropdown, dropdown arrow and tab arrow still fire their
 --     hover and explain their option, in the pane and in the collapsed pane's tooltip
+--   greyed-slider-input, greyed-slider-input-box: a greyed-out slider bar and input box under the real mouse, which
+--     these need as toggle-reset-clipped does: the help pane explains their option (docs/work/2026-11-05-review-fixes,
+--     backlog #31)
+--   link-highlight, link-highlight-over, link-highlight-away: the link row's highlight is not drawn with the mouse away,
+--     is drawn with the mouse on the row and goes again, a screenshot each (the same mouse; backlog #16)
 --   search: the found options drawn as rows under their section's name (docs/work/2026-11-03-blizzard-search);
 --     search-letter: from the first letter; search-pane: the pane explains the search, a hovered row with its section;
 --     search-broad: Search descriptions finds a word only a description holds; search-change: a check box changed in
@@ -1174,6 +1179,270 @@ local function GreyedSteps()
     }
 end
 
+-- [[ Steps with the mouse on a spot: the kit's marker puts it there, else the player within mouseWait ]] --
+-- The kit moves the cursor along a path, and the game runs an enter on the next frame: a step checks once the cursor has
+-- stayed on its spot this long
+local hoverHold = 0.5
+
+-- Mouse() of a step: true once over has held for hoverHold since it last turned true (state: the step's own table)
+local function Settled(state, over)
+    if not over then
+        state.Since = nil
+        return false
+    end
+    state.Since = state.Since or GetTime()
+    return GetTime() - state.Since >= hoverHold
+end
+
+-- The frame the game gives the mouse to (its enter, its leave, a button's highlight), else none
+local function MouseFocus()
+    if GetMouseFoci then
+        local foci = GetMouseFoci()
+        return foci and foci[1]
+    end
+    return GetMouseFocus and GetMouseFocus()
+end
+
+-- Whether a frame has the mouse as the game counts it for its highlight: IsMouseOver only tells where the cursor is
+local function HasMouse(frame)
+    if frame.IsMouseMotionFocus then return frame:IsMouseMotionFocus() and true or false end
+    return MouseFocus() == frame
+end
+
+-- What the mouse is on, by the names a step gives the frames it knows ({ [frame] = name })
+local function MouseOn(named)
+    local focus = MouseFocus()
+    if not focus then return "no frame" end
+    if named[focus] then return named[focus] end
+    local name = focus.GetDebugName and focus:GetDebugName()
+    return "another frame" .. (name and name ~= "" and (" (" .. name .. ")") or "")
+end
+
+-- The link row's highlight (docs/work/2026-11-05-review-fixes, backlog #16): RowFrames.lua makes it with CreateTexture(),
+-- which gives no layer, before SetHighlightTexture, so it may stay drawn as a faint wash. The game draws a texture of the
+-- HIGHLIGHT layer only while its button has the mouse, a texture of any other layer whenever it is visible: each step
+-- reads the highlight's layer, whether it is shown and visible, its alpha and whether the row has the mouse, and the
+-- screenshot shows what is drawn. Three states, a step and a screenshot each: the mouse away (on the help pane), on the
+-- row, and away again. The first link of the first section that has one (the fixture's About).
+local function LinkRow()
+    local frame = Window()
+    for _, element in ipairs(frame.Elements or {}) do
+        if element.Kind == "Link" then return RowOfElement(element), element end
+    end
+end
+
+-- Shows the link's section, unless the page shows it already, with the help pane open (the spot away from the row)
+local function ShowLink()
+    local frame = Window()
+    if frame.PaneCollapsed then frame:SetPaneCollapsed(false) end
+    local row, element = LinkRow()
+    if row and not frame.Searching then return row end
+    for _, sectionId in ipairs(fixtures.Sections) do
+        for _, candidate in ipairs(fixtures.GetElements(sectionId)) do
+            if candidate.Kind == "Link" then
+                frame:ShowSection(sectionId)
+                row, element = LinkRow()
+                if not element then return nil, sectionId .. " shows no link" end
+                if not row then return nil, "the link's row is not drawn" end
+                return row
+            end
+        end
+    end
+    return nil, "no section has a link"
+end
+
+local function HighlightState(row)
+    local texture = row:GetHighlightTexture()
+    local state = { Cursor = row:IsMouseOver() and true or false, Mouse = HasMouse(row) }
+    if not texture then
+        state.Missing = true
+        return state
+    end
+    state.Layer, state.Shown, state.Visible, state.Alpha = texture:GetDrawLayer(), texture:IsShown(), texture:IsVisible(), texture:GetAlpha()
+    state.Drawn = state.Visible and state.Alpha > 0 and (state.Layer ~= "HIGHLIGHT" or state.Mouse)
+    return state
+end
+
+local function LinkHighlightSteps()
+    local seen
+    local states = {
+        { Name = "link-highlight", State = "mouse away", Text = "link row, mouse away (on the help pane): no highlight" },
+        { Name = "link-highlight-over", State = "mouse over", OnRow = true, Text = "link row, mouse over: its highlight shows" },
+        { Name = "link-highlight-away", State = "mouse away again", Text = "link row, mouse away again: the highlight goes" },
+    }
+    local list = {}
+    for i, spec in ipairs(states) do
+        list[i] = {
+            Name = spec.Name,
+            Needs = i > 1 and states[i - 1].Name or nil,
+            Text = ("%s (%d s)"):format(spec.Text, mouseWait),
+            Run = function()
+                seen = {}
+                local row, why = ShowLink()
+                if not row then return why end
+            end,
+            Hover = function(kit)
+                local row = LinkRow()
+                if spec.OnRow then
+                    if row then kit.HoverAt(row, 0, 0) end
+                else
+                    kit.HoverAt(Window().HelpScrollBox, 0, 0)
+                end
+            end,
+            Mouse = function()
+                local row = LinkRow()
+                if not row then return false end
+                if spec.OnRow then return Settled(seen, row:IsMouseOver()) end
+                return Settled(seen, Window().HelpScrollBox:IsMouseOver() and not row:IsMouseOver())
+            end,
+            Check = function()
+                local row = LinkRow()
+                if not row then
+                    Add("FAIL", ("%s: the link's row is not drawn"):format(spec.State))
+                    return
+                end
+                local state = HighlightState(row)
+                local name = row.Text:GetText() or "?"
+                if state.Missing then
+                    Add(spec.OnRow and "FAIL" or "PASS", ("%s, link '%s': the row has no highlight texture (cursor on the row %s)"):format(spec.State,
+                        name, state.Cursor and "yes" or "no"))
+                    return
+                end
+                local ok = state.Drawn == (spec.OnRow and true or false)
+                local verdict = state.Drawn and (spec.OnRow and "drawn" or "drawn without the mouse: a permanent wash")
+                    or (spec.OnRow and "not drawn under the mouse" or "not drawn")
+                Add(ok and "PASS" or "FAIL", ("%s, link '%s': highlight %s (layer %s, shown %s, visible %s, alpha %.2f; cursor on the row %s, the row has the mouse %s)"):format(
+                    spec.State, name, verdict, tostring(state.Layer), state.Shown and "yes" or "no", state.Visible and "yes" or "no", state.Alpha,
+                    state.Cursor and "yes" or "no", state.Mouse and "yes" or "no"))
+            end
+        }
+    end
+    return list
+end
+
+-- A greyed-out slider bar and input box explain themselves under the mouse (docs/work/2026-11-05-review-fixes, backlog
+-- #31). greyed-help plays a greyed button's own enter, which the game runs because the button asks for it
+-- (SetMotionScriptsWhileDisabled). A slider and an edit box have no such setting (RowMixins.lua, HoverWhileDisabled): whether
+-- the game runs their enter while they are greyed shows only under a real mouse. The slider is the one beside a check box
+-- that greys while its check box is off (the fixture's Force two columns and Column threshold, as Krowi_AchievementFilter's),
+-- the input box one that greys with its parent (Log file under Verbose mode). Each step turns that check box off, waits for
+-- the cursor on the greyed control, then reads whether the help pane explains its option, which frame has the mouse and
+-- whether the row's light is on (the row's enter ran last, not its leave); after its screenshot the check box is on again.
+-- PASS only when the pane explains the greyed control's option: a FAIL is the bug the backlog item asks about.
+local function GreyedHoverSteps()
+    local turnedOff -- the check box a step turned off, on again after its screenshot (Restore too, should the run stop)
+    local function Release()
+        if turnedOff then
+            turnedOff:Set(true)
+            Window():OnOptionChanged(turnedOff)
+            turnedOff = nil
+        end
+    end
+    -- The frames of an option row the mouse can be on, by name
+    local function RowParts(row)
+        return { [row] = "the row", [row.Toggle] = "the check box", [row.Range] = "the slider's frame", [row.Range.Slider] = "the slider bar",
+            [row.Range.Back] = "the slider's left arrow", [row.Range.Forward] = "the slider's right arrow", [row.Input] = "the input box" }
+    end
+    local cases = {
+        {
+            Name = "greyed-slider-input",
+            What = "slider bar",
+            -- The first check box whose slider greys while it is off: the section, the check box, the slider's option and the
+            -- option whose row draws the slider (the check box's)
+            Find = function()
+                for _, sectionId in ipairs(fixtures.Sections) do
+                    for _, element in ipairs(fixtures.GetElements(sectionId)) do
+                        local with = element.With
+                        if with and with.Type == "range" and with.DisabledIf and not with:IsHidden() then
+                            return sectionId, element.Option, with, element.Option
+                        end
+                    end
+                end
+            end,
+            Control = function(row) return row.Range.Slider end,
+        },
+        {
+            Name = "greyed-slider-input-box",
+            What = "input box",
+            -- The first input box that greys with its parent: the section, the parent, the input's option and its row's
+            Find = function()
+                for _, sectionId in ipairs(fixtures.Sections) do
+                    for _, element in ipairs(fixtures.GetElements(sectionId)) do
+                        local option = element.Option
+                        if option and option.Type == "input" and option.DisabledIf and option:GetParent() and not option:IsHidden() then
+                            return sectionId, option:GetParent(), option, option
+                        end
+                    end
+                end
+            end,
+            Control = function(row) return row.Input end,
+        },
+    }
+    local list = {}
+    for i, case in ipairs(cases) do
+        local target, seen
+        local function Control()
+            local row = target and RowOf(target.RowOption)
+            return row and case.Control(row), row
+        end
+        list[i] = {
+            Name = case.Name,
+            Text = ("greyed-out %s under the mouse: the help explains it (%d s)"):format(case.What, mouseWait),
+            Run = function()
+                Release()
+                local frame = Window()
+                if frame.PaneCollapsed then frame:SetPaneCollapsed(false) end
+                local sectionId, switch, option, rowOption = case.Find()
+                if not option then
+                    target = nil
+                    return ("no %s that greys with a check box"):format(case.What)
+                end
+                target, seen = { Switch = switch, Option = option, RowOption = rowOption }, {}
+                frame:ShowSection(sectionId, rowOption.Id)
+                if switch:Get() then
+                    Remember(switch)
+                    switch:Set(false)
+                    frame:OnOptionChanged(switch)
+                    turnedOff = switch
+                end
+                if not option:IsDisabled() then
+                    Release()
+                    return ("%s does not grey with %s off"):format(option:GetLabel(), switch:GetLabel())
+                end
+                if not Control() then return "its row is not drawn" end
+            end,
+            Hover = function(kit)
+                local control = Control()
+                if control then kit.HoverAt(control, 0, 0) end
+            end,
+            -- Where the cursor is, not where the game sends the mouse: a greyed control that takes no enter is the finding
+            Mouse = function()
+                local control = Control()
+                return Settled(seen, control ~= nil and control:IsMouseOver())
+            end,
+            Check = function()
+                local frame = Window()
+                local control, row = Control()
+                local label = ("%s's %s"):format(target.Option:GetLabel(), case.What)
+                if not control then
+                    Add("FAIL", label .. ": its row is not drawn")
+                else
+                    local greyed = not control:IsEnabled()
+                    local shown = frame.HoverOption
+                    local explains = shown == target.Option
+                    local asks = control.GetMotionScriptsWhileDisabled and (control:GetMotionScriptsWhileDisabled() and "asks for its hover while greyed"
+                        or "does not ask for its hover while greyed") or "has no setting to hover while greyed"
+                    Add(greyed and explains and "PASS" or "FAIL", ("%s, %s (%s off), under the mouse: the pane explains %s; the mouse is on %s, the row's light %s; the %s %s"):format(
+                        label, greyed and "greyed" or "not greyed", target.Switch:GetLabel(), explains and "it" or (shown and ("'" .. shown:GetLabel() .. "'") or "the section, not the option"),
+                        MouseOn(RowParts(row)), row.Hover:IsShown() and "on" or "off", case.What, asks))
+                end
+                After(afterShot / 2, Release)
+            end
+        }
+    end
+    return list
+end
+
 local function BuildSteps()
     local list = {
         {
@@ -1309,6 +1578,9 @@ local function BuildSteps()
     })
     for _, step in ipairs({ GreyedSteps() }) do tinsert(list, step) end
     for _, step in ipairs(SearchSteps()) do tinsert(list, step) end
+    -- The steps that need the mouse, toggle-reset-clipped last: it leaves the cursor off the list for pane and close
+    for _, step in ipairs(LinkHighlightSteps()) do tinsert(list, step) end
+    for _, step in ipairs(GreyedHoverSteps()) do tinsert(list, step) end
     tinsert(list, ClippedResetStep())
     tinsert(list, {
         Name = "pane",
