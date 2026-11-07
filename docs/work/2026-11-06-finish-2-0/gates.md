@@ -25,3 +25,5 @@ Class: harness
 | 2026-11-07 | design | Phase 3: a section whose GetElements errors (B14b, B14c) | the previous section stays current, OnSectionShown not run for the broken one | "Yes, previous section stays current (Recommended)" | took |
 | 2026-11-07 | scope | Phase 3: the extra defects found by the scenarios' author and the structure move | all of them | "All of them (Recommended)" | took |
 | 2026-11-07 | plan | Phase 3: the plan (fix list by file, three Opus hand-offs, test addon steps, proof) | approve | plan approved at ExitPlanMode with no changes | took |
+| 2026-11-07 | design | Phase 3: the stale select rule narrowed to exclude a Placeholder or Confirm, a value that is the option's own default, and nil | the narrowed rule | "Yes, the narrowed rule (Recommended)" | took |
+| 2026-11-07 | merge | Phase 3: Krowi_Options #7 | merge | "Merge (Recommended)" | took |
