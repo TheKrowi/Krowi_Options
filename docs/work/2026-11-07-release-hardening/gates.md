@@ -7,3 +7,6 @@ Class: harness
 | 2026-11-07 | design | Show me: is a real hover over the stand-in secure button enough, or also a real click (the kit's marker must learn clicks first) | hover is enough | "Also a real click" | other |
 | 2026-11-07 | design | Combat: tell the window that combat starts and ends (its own handler, no real fight) and check what greys | yes, tell the window | "Yes, tell the window (Recommended)" | took |
 | 2026-11-07 | plan | The plan (fixture answers and a secure stand-in, nine new live steps, five clients; the kit's click first), shown with the kit's plan at one ExitPlanMode | approve | plan approved at ExitPlanMode with no changes | took |
+| 2026-11-07 | design | Taint review, finding 1 (KAF's Open options closes Blizzard's Settings window and saves the bindings from KAF's code) | fix it in KAF 105.0 | "Fix it in KAF 105.0 (Recommended)" | took |
+| 2026-11-07 | design | Taint review, finding 2 (a dropdown click clears the chat box's focus from addon code, Retail and Forever) | test it in game, accept if clean | "Test it, accept if clean (Recommended)" | took |
+| 2026-11-07 | design | Taint review, finding 3 (KAF's Show me map overlay stays above Blizzard's Options window) | fix it in KAF 105.0 | "Fix it in KAF 105.0 (Recommended)" | took |
