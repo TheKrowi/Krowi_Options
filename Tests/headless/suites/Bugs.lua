@@ -224,6 +224,25 @@ Scenario("B4b", "after a change a tab row keeps its old Position when the page's
     Target = "the tab row shows position 2",
 })
 
+-- A change made on a section reads that section again: the page must be asked for the open section's id
+Scenario("B4c", "after a change the page is read again for the open section", {
+    Observe = function()
+        local lib = LoadCopy()
+        local asked = {}
+        local window = Window(lib, { Saved = {}, SectionId = "first", Config = Config({ GetElements = function(id)
+            asked[#asked + 1] = tostring(id)
+            return id == "first" and { { Kind = "Link", Text = "Profiles", Detail = "1 profile" } } or {}
+        end }) })
+        window.PageScrollBox = DrawingPage(lib, window)
+        window:FillPage(ScrollBoxConstants.DiscardScrollPosition)
+        asked = {}
+        window:OnOptionChanged(Option("Changed"))
+        return "GetElements was asked for " .. table.concat(asked, ", ") .. "; the page keeps " .. #window.PageScrollBox.Frames .. " row(s)"
+    end,
+    Recorded = "GetElements was asked for first; the page keeps 1 row(s)",
+    Target = "GetElements was asked for first; the page keeps 1 row(s)",
+})
+
 -- [[ B5: With on an option that is not a toggle ]] --
 Scenario("B5a", "a range option with an execute With: its own slider sets the With", {
     Observe = function()

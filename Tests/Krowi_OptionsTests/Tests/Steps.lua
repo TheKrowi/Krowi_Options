@@ -24,6 +24,9 @@
 --     Default line comes and goes with a change made under the mouse, toggle-help-follows-grid the same on a grid's check
 --     box; toggle-reset-clipped, the one step that needs the mouse (the kit's marker serves it, else the player's within
 --     30 s): the arrow goes when the mouse leaves a row through its part scrolled out of view
+--   undo-reload: the undo arrow of a check box whose slider needs a reload lights the reload bar (Bugs B1)
+--   input-focus-lost: a text box saves its typed text as it loses the focus, and Escape reverts it (Bugs B13)
+--   select-stale: a dropdown whose saved value is no longer a choice shows its default, which is saved (Bugs B12)
 --   slider-help: over a check box's slider the help explains the slider
 --   greyed-help, greyed-help-collapsed: a greyed-out check box, dropdown, dropdown arrow and tab arrow still fire their
 --     hover and explain their option, in the pane and in the collapsed pane's tooltip
@@ -36,9 +39,9 @@
 -- /kotest <what> runs only some steps (SelectSteps, at the end of the file): a set (smoke, behaviour), a step's name, the
 -- start of names (toggle, search, section), or a step's number in the banner, each with the steps it builds on and the
 -- open first.
--- At the end every value the steps changed and the window's saved state (place, pane, search breadth, last section) are
--- put back, and the Lua errors of the session that name Krowi_Options are reported from BugGrabber. Combat stops the
--- run; the values go back once it ends. The run never sets a CVar.
+-- At the end every value the steps changed, the window's saved state (place, pane, search breadth, last section) and its
+-- reload bar are put back, and the Lua errors of the session that name Krowi_Options are reported from BugGrabber.
+-- Combat stops the run; the values go back once it ends. The run never sets a CVar.
 
 local _, addon = ...
 addon.Tests = addon.Tests or {}
@@ -53,6 +56,7 @@ local mouseWait, pollEvery = 30, 0.1 -- a step that needs the player's mouse wai
 local toggleId = "window.centerTitle"
 local rangeId = "window.indentation"
 local inputId = "window.dateFormat"
+local selectId = "tooltips.sort1" -- a dropdown with a default, and neither a Placeholder nor a Confirm (select-stale)
 local errorPattern = "Krowi_Options" -- the library's folder, and this addon's (Krowi_OptionsTests)
 
 local live -- the run in progress
@@ -386,6 +390,134 @@ local function ChangeSteps(kind, optionId, Change)
     }
 end
 
+-- An input box saves on focus lost and on Enter, and Escape reverts (Krowi, 2026-11-07; Bugs B13,
+-- docs/work/2026-11-06-finish-2-0). The mechanism (RowMixins.lua, OptionRowMixin:OnLoad): the box's OnEditFocusLost hook
+-- saves the box's text into its option unless it equals the saved value, and refreshes the window through
+-- OnOptionChanged. Enter and Escape end the typing themselves and set the row's InputKept flag before they clear the focus,
+-- so the focus lost they cause saves nothing: Enter has saved the text already, Escape has put the saved text back in the
+-- box. The box's OnEditFocusGained hook lowers the flag, so a box focused again saves on its next focus lost.
+-- A test does not type: the step gives the box the focus, sets its text and clears the focus, as a click into the box,
+-- typing and a click elsewhere do, without Enter. Then the box gets the focus again, other text, and its own Escape
+-- script. In game Escape puts the saved text in the box before the focus goes, so that focus lost would find nothing to
+-- save even without the flag; the flag itself is proven headless, on a box whose text does not change (B13b). Part one
+-- is read half a settle later, in case the game gives the focus lost a frame later, and part two runs then.
+local focusTexts = { "yyyy-mm-dd", "yy-mm-dd" } -- typed before the focus lost: the first that is not the saved value
+local escapedText = "mm/dd/yyyy" -- typed after it, then Escape
+
+local function InputFocusLostStep(optionId)
+    local sectionId, option, seen
+    return {
+        Name = "input-focus-lost",
+        Needs = "input-shown",
+        Text = "text typed in a text box saves as the box loses the focus, and Escape puts the saved text back",
+        Run = function()
+            sectionId, option = FindOption(optionId)
+            local row = option and RowOf(option)
+            if not row then
+                return "its row is not drawn"
+            end
+            Remember(option)
+            seen = { First = option:Get() ~= focusTexts[1] and focusTexts[1] or focusTexts[2] }
+            local box = row.Input
+            box:SetFocus()
+            box:SetText(seen.First)
+            box:ClearFocus() -- no Enter: the focus lost alone saves it
+            After(settle / 2, function()
+                local shown = RowOf(option)
+                seen.Saved = option:Get()
+                seen.Drawn = shown ~= nil
+                seen.Line = shown and shown.ChangedBar:IsShown() == option:IsChanged()
+                seen.Footer, seen.Count = FooterAgrees(sectionId)
+                if not shown then
+                    return
+                end
+                shown.Input:SetFocus()
+                shown.Input:SetText(escapedText)
+                seen.Typed = shown.Input:GetText() == escapedText
+                shown.Input:GetScript("OnEscapePressed")(shown.Input)
+            end)
+        end,
+        Check = function()
+            if not seen.Drawn then
+                Add("FAIL", ("%s: '%s' typed without Enter, after the focus lost the option holds '%s' and its row is not drawn"):format(optionId,
+                    seen.First, tostring(seen.Saved)))
+                return
+            end
+            local saved = seen.Saved == seen.First
+            Add(saved and seen.Line and seen.Footer and "PASS" or "FAIL", ("%s: '%s' typed without Enter, after the focus lost the option holds '%s', changed line %s, footer %s (%d changed)"):format(
+                optionId, seen.First, tostring(seen.Saved), seen.Line and "follows" or "wrong", seen.Footer and "follows" or "wrong", seen.Count))
+            local row = RowOf(option)
+            local box = row and row.Input
+            local kept = option:Get() == seen.First
+            local reverted = box and box:GetText() == seen.First and not box:HasFocus()
+            Add(seen.Typed and kept and reverted and "PASS" or "FAIL", ("%s: '%s' typed%s, then Escape: the option holds '%s', the box shows '%s'%s"):format(optionId,
+                escapedText, seen.Typed and "" or " (the box did not take it)", tostring(option:Get()), box and tostring(box:GetText()) or "nothing, its row is not drawn",
+                box and box:HasFocus() and " and keeps the focus" or ""))
+        end
+    }
+end
+
+-- The text a dropdown shows: WowStyle2DropdownTemplate's Text, which the menu's selected radio sets (its default text,
+-- the option's Placeholder, with no radio selected)
+local function SelectText(row)
+    local dropdown = row.Select.Dropdown
+    return dropdown.Text and dropdown.Text:GetText() or dropdown:GetText()
+end
+
+-- A select whose saved value is no longer one of its choices (a profile deleted elsewhere) shows its default, and the
+-- default is saved through the option's own Set (Krowi, 2026-11-07; Bugs B12, docs/work/2026-11-06-finish-2-0): before,
+-- the dropdown showed nothing. The option is set to another choice first, so the dropdown's text has to change to show
+-- the default. Both values are written where the fixture keeps its option values (Fixtures.lua's own table; config.Saved
+-- holds only the window's state) and the window is drawn again through its own Refresh, as after a change made
+-- elsewhere: the row's Refresh reads the value, finds it stale and sets the default.
+local staleValue = "removed"
+
+local function SelectStaleStep(optionId)
+    local sectionId, option, seen
+    return {
+        Name = "select-stale",
+        Text = "a dropdown whose saved value is no longer a choice shows its default and saves it",
+        Run = function()
+            local frame = Window()
+            sectionId, option = FindOption(optionId)
+            if not option then
+                return optionId .. " is in no section"
+            end
+            frame:ShowSection(sectionId, optionId)
+            local row = RowOf(option)
+            if not row then
+                return "its row is not drawn"
+            end
+            Remember(option)
+            local _, default = option:GetDefault()
+            local other
+            for _, pair in ipairs(option:GetValues()) do
+                if pair[1] ~= default and other == nil then
+                    other = pair[1]
+                end
+            end
+            option:Set(other)
+            frame:Refresh()
+            seen = { Default = default, Other = option:FormatValue(other), Before = SelectText(row) }
+            option:Set(staleValue)
+            frame:Refresh()
+        end,
+        Check = function()
+            local row = RowOf(option)
+            local text = row and SelectText(row)
+            local defaultText = option:FormatValue(seen.Default)
+            local before = seen.Before == seen.Other
+            local shows = text == defaultText
+            local saved = option:Get() == seen.Default
+            local line = row and row.ChangedBar:IsShown() == option:IsChanged()
+            local footer, count = FooterAgrees(sectionId)
+            Add(before and shows and saved and line and footer and "PASS" or "FAIL", ("%s: showing '%s', then '%s' saved, no choice: the dropdown shows '%s' (its default '%s'), the option holds '%s', changed line %s, footer %s (%d changed)"):format(
+                optionId, tostring(seen.Before), staleValue, row and tostring(text) or "nothing, its row is not drawn", defaultText, tostring(option:Get()),
+                line and "follows" or "wrong", footer and "follows" or "wrong", count))
+        end
+    }
+end
+
 -- The arrow on a changed row sets its option back to the default (docs/work/2026-10-31-options-markers). A test does not
 -- move the mouse, so the step runs the row's own enter and leave and the arrow's click. An option still at its default
 -- is changed through its control first. The arrow is hidden away from the mouse, shows on enter with its atlas in the
@@ -430,6 +562,88 @@ local function ResetStep(kind, optionId, Change)
                 shows and "hidden away from the mouse and shown on enter before the name" or ("wrong (hidden away %s, shown on enter %s, atlas %s, in the margin %s)"):format(
                     tostring(arrow.Hidden), tostring(arrow.Shown), tostring(arrow.Atlas), tostring(arrow.Margin)),
                 footer and "follows" or "wrong", count))
+        end
+    }
+end
+
+-- The first check box whose option beside it (its With) needs a reload while the check box itself does not, its section
+-- and the With
+local function FindReloadPair()
+    for _, sectionId in ipairs(fixtures.Sections) do
+        for _, element in ipairs(fixtures.GetElements(sectionId)) do
+            local with = element.With
+            if with and with:GetNeedsReload() and not with:IsHidden() and not element.Option:GetNeedsReload() then
+                return sectionId, element.Option, with
+            end
+        end
+    end
+end
+
+-- The undo arrow sets back the check box and the option beside it, and lights the reload bar when that one needs a
+-- reload (Bugs B1, docs/work/2026-11-06-finish-2-0): before, only the check box's own reload was asked. The fixture's
+-- Force two columns carries Column threshold, which needs a reload (Fixtures.lua). The threshold is changed through its
+-- slider, which lights the bar by itself, so the bar is put out before the arrow: what lights it then is the arrow's
+-- click. As toggle-reset, the row's enter and leave and the arrow's click are played. After the screenshot the bar goes
+-- back to what it was before the step (Restore too, should combat stop the run first).
+local function UndoReloadStep()
+    local option, with, seen
+    return {
+        Name = "undo-reload",
+        Text = "the undo arrow lights the reload bar when the option beside the check box needs a reload",
+        Run = function()
+            local frame = Window()
+            local sectionId
+            sectionId, option, with = FindReloadPair()
+            if not option then
+                return "no check box whose slider or button needs a reload"
+            end
+            frame:ShowSection(sectionId, option.Id)
+            local row = RowOf(option)
+            if not row then
+                return "its row is not drawn"
+            end
+            Remember(option)
+            Remember(with)
+            live.ReloadBefore = live.ReloadBefore or { Value = frame.ReloadPending }
+            local min, max = with:GetRange()
+            row.Range:SetValue(with:Get() ~= max and max or min)
+            seen = { Changed = with:IsChanged(), SliderLit = frame.ReloadPending and true or false }
+            frame.ReloadPending = nil
+            frame:RefreshFooter()
+            seen.Out = not frame.ReloadButton:IsShown() and not frame.ReloadBackground:IsShown()
+            row = RowOf(option)
+            if not row then
+                seen.Missing = "its row is not drawn after the slider's change"
+                return
+            end
+            row:OnEnter()
+            local reset = row.Reset
+            seen.Arrow = reset:IsShown()
+            reset:GetScript("OnClick")(reset, "LeftButton")
+            row:OnLeave()
+        end,
+        Check = function()
+            local frame = Window()
+            local label = ("%s + %s"):format(option:GetLabel(), with:GetLabel())
+            if seen.Missing then
+                Add("FAIL", ("%s: %s"):format(label, seen.Missing))
+            else
+                local lit = frame.ReloadPending and frame.ReloadButton:IsShown() and frame.ReloadBackground:IsShown()
+                local back = not option:IsChanged() and not with:IsChanged()
+                local row = RowOf(option)
+                local line = row and not row.ChangedBar:IsShown()
+                local ok = seen.Changed and seen.Out and seen.Arrow and lit and back and line
+                Add(ok and "PASS" or "FAIL", ("%s: the slider %s (the bar %s), the bar put out %s, the arrow %s on enter; after its click the reload bar %s (pending %s, Reload Now %s, background %s), %s, changed line %s"):format(
+                    label, seen.Changed and "changed it" or "did not change it", seen.SliderLit and "lit" or "not lit", seen.Out and "yes" or "no",
+                    seen.Arrow and "shown" or "not shown", lit and "lit" or "not lit", tostring(frame.ReloadPending), frame.ReloadButton:IsShown() and "shown" or "hidden",
+                    frame.ReloadBackground:IsShown() and "shown" or "hidden", back and "both back at their defaults" or "not back",
+                    not row and "not drawn" or line and "gone" or "still shown"))
+            end
+            After(afterShot / 2, function()
+                local shown = Window()
+                shown.ReloadPending = live.ReloadBefore.Value
+                shown:RefreshFooter()
+            end)
         end
     }
 end
@@ -1055,6 +1269,7 @@ local function BuildSteps()
     end
     for _, step in ipairs({ ChangeSteps("toggle", toggleId, function(row) row.Toggle:Click() end) }) do tinsert(list, step) end
     tinsert(list, ResetStep("toggle", toggleId, function(row) row.Toggle:Click() end))
+    tinsert(list, UndoReloadStep())
     tinsert(list, HelpFollowsStep(toggleId))
     tinsert(list, GridHelpFollowsStep())
     for _, step in ipairs({ ChangeSteps("range", rangeId, function(row, option)
@@ -1065,6 +1280,8 @@ local function BuildSteps()
         row.Input:SetText((option:Get() or "") .. " x")
         row.Input:GetScript("OnEnterPressed")(row.Input)
     end) }) do tinsert(list, step) end
+    tinsert(list, InputFocusLostStep(inputId))
+    tinsert(list, SelectStaleStep(selectId))
     -- Over a check box's slider the help pane explains the slider, not the check box (Krowi, 2026-11-02: KAF's Force two
     -- columns threshold, the fixture's too); the mouse's arrival on the bar is played through the row's own handler
     local pairSection, pairOption
@@ -1178,6 +1395,11 @@ local function Restore()
         frame.SearchBroad:SetChecked(frame.BroadSearch)
         frame.SearchEveryTab = before.SearchAll and true or false
         frame.SearchAll:SetChecked(frame.SearchEveryTab)
+        -- The reload bar as it was before undo-reload lit it, also when the run stopped before that step put it back
+        if live.ReloadBefore then
+            frame.ReloadPending = live.ReloadBefore.Value
+            frame:RefreshFooter()
+        end
         local was = live.WasShown
         if was and tContains(Internal().Tabs, was.Tab) then
             frame:ShowTab(was.Tab, was.Section)

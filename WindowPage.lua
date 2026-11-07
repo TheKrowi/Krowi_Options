@@ -316,7 +316,7 @@ function WindowMixin:OnOptionChanged(option, with)
             elements = self:SearchElements(self.SearchBox:GetText())
             signature = SignatureOf(elements)
         else
-            elements, signature = ReadPage(self)
+            elements, signature = ReadPage(self, self.SectionId)
         end
         if signature and signature ~= self.Signature then
             self:FillPage(ScrollBoxConstants.RetainScrollPosition, elements, signature)
