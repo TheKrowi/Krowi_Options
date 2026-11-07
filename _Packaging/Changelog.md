@@ -1,7 +1,7 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
-## 2.0 - 2026-11-04
+## 2.0 - 2026-11-07
 ### Changed
 - Registers as `Krowi_Options_2` (was `Krowi_Options_1`), since the points below change the API
 - The window's texts are the library's own, translated in the game's languages on its CurseForge project; a tab's config no longer takes `Strings`
