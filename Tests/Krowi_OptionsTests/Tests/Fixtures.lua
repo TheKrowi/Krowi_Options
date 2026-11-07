@@ -545,20 +545,14 @@ function fixtures.Register(lib, saved)
     return fixtures.Tab
 end
 
--- A second addon's tab, as Krowi_AchievementFilter's window-second-tab scenario made it: every field the library asks
--- for (its configFields), most of them doing nothing, and one section with one option
+-- A second addon's tab, as Krowi_AchievementFilter's window-second-tab scenario made it: only the five fields a config
+-- must have, the window's defaults for the rest, and one section with one option
 function fixtures.SecondConfig(saved)
     return {
         TabName = fixtures.SecondTabName,
         Saved = saved,
         Groups = { { Name = "Second", Sections = { "second" } } },
         SectionName = function() return "Second" end,
-        IsNew = function() return false end,
-        Landing = function() return "second" end,
-        OnSectionShown = function() end,
         GetElements = function() return { Row(secondTooltip) } end,
-        GetHelp = function() return nil end,
-        ResetSection = function() return false end,
-        ChangedCount = function() return 0 end,
     }
 end

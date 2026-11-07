@@ -50,8 +50,15 @@ lib.Markup = {
     Reset = "|A:common-icon-undo:12:12|a",
 }
 
---[[ The config lib.CreateWindow(config) takes. CreateWindow refuses one that lacks a field or has it of the wrong type,
-    with an error at the addon's own line naming the tab and the field; only OnCreated may be left out.
+--[[ The config lib.CreateWindow(config) takes: five required fields, and optional ones the window gives a default when
+    they are left out. CreateWindow refuses a config that lacks a required field, has a field of the wrong type or has a
+    key the window does not know (1.x's Strings is one), with an error at the addon's own line naming the tab and the
+    field or the key:
+      Krowi_Options: tab "MyAddon": config.GetElements must be a function, not nil
+      Krowi_Options: tab "MyAddon": config.OnSectionShow is not a key the window knows; did you mean OnSectionShown?
+    (the question only when exactly one known key matches the unknown one ignoring case, starts it or starts with it).
+    The window keeps its own copy of the config with the defaults filled in; the addon's table stays as it gave it.
+  Required:
     TabName         the tab's text: the addon's name, not translated
     Saved           the addon's table for the window, or a function returning it, asked until it gives a table (so the
                     table can live in saved variables not loaded yet) and then kept for the session. The library writes
@@ -64,13 +71,15 @@ lib.Markup = {
                       LastSection  the section this addon's tab showed last
     Groups          { { Name, Sections = { sectionId, ... } } } for the navigation and the search
     SectionName(id) a section's name in the navigation, the search and the help pane's kicker
-    IsNew(id)       whether the navigation marks a section New
-    Landing()       the section to open when none is asked for
-    OnSectionShown(id) runs after GetElements(id) has been read for it, and not at all for a section whose GetElements
-                    errors while another section is open (that one never becomes the open section)
     GetElements(id) the section's elements (RowMixins.lua's header). It runs on every change and, while searching, for
                     every section of every searched tab on each keystroke, so it builds cheaply and changes nothing.
-    GetHelp(id)     nil, or { Title, Blocks, ShowMe, CanShowMe, ShowMeSecure, ShowMeNote }:
+  Optional, each with the window's default when left out:
+    IsNew(id)       whether the navigation marks a section New. Default: never.
+    Landing()       the section to open when none is asked for. Default: "overview".
+    OnSectionShown(id) runs after GetElements(id) has been read for it, and not at all for a section whose GetElements
+                    errors while another section is open (that one never becomes the open section). Default: nothing.
+    GetHelp(id)     the section's help, or nil for none. Default: nil, no help. The help is
+                    { Title, Blocks, ShowMe, CanShowMe, ShowMeSecure, ShowMeNote }:
                       Blocks       { { Heading } | { Text } | { Term, Text } | { Picture, Width, Height, TexCoords } }
                       ShowMe()     shows the feature after the window closes; false when it had nothing to show,
                                    and the window comes back
@@ -78,9 +87,13 @@ lib.Markup = {
                       ShowMeSecure(button, close)  for a feature that needs a secure button laid over Show me
                                    (WindowHelp.lua, ReleaseShowMe); called with nil to let it go
                       ShowMeNote   a string, or a function returning one, shown where Show me cannot be
-    ResetSection(id), ChangedCount(id)
+    ResetSection(id) Defaults' Yes: sets the section's options back to their defaults; true when one of them needs a
+                    reload, which lights the reload bar. Default: sets nothing back and lights no reload bar.
+    ChangedCount(id) how many of the section's options differ from their defaults, shown beside Defaults, which is greyed
+                    out at 0. Default: 0.
     OnCreated(frame) called once per tab: when the window is made, or when the tab registers after that. frame.Lightbox
-                    is the enlarged help picture, which the addon's Escape handling closes like a window.
+                    is the enlarged help picture, which the addon's Escape handling closes like a window. Default: not
+                    called.
     "overview" opens every tab and stands in no group: GetElements, GetHelp, OnSectionShown and SectionName get it, Landing
     may return it, and IsNew, ResetSection and ChangedCount never get it.
     Every text an addon hands the window, here and in its elements, is a plain string, never a secret value (12.x): the
@@ -269,24 +282,65 @@ function lib.Internal.SetShared(key, value)
     WriteShared()
 end
 
--- What the window calls on a config: each field and the types it may have
+-- Every key a config may have and the types it may have: the five required first, then the optional ones, which may
+-- be nil. Checked in this order, so a missing required field is named before an optional one of the wrong type.
 local configFields = {
     { "TabName", "string" }, { "Saved", "table", "function" }, { "Groups", "table" }, { "SectionName", "function" },
-    { "IsNew", "function" }, { "Landing", "function" }, { "OnSectionShown", "function" }, { "GetElements", "function" },
-    { "GetHelp", "function" }, { "ResetSection", "function" }, { "ChangedCount", "function" }, { "OnCreated", "function", "nil" },
+    { "GetElements", "function" },
+    { "IsNew", "function", "nil" }, { "Landing", "function", "nil" }, { "OnSectionShown", "function", "nil" },
+    { "GetHelp", "function", "nil" }, { "ResetSection", "function", "nil" }, { "ChangedCount", "function", "nil" },
+    { "OnCreated", "function", "nil" },
 }
+
+-- What the window uses for an optional field the addon left out (OnCreated has none: it is called only when given)
+local configDefaults = {
+    IsNew = function() return false end,
+    Landing = function() return "overview" end,
+    OnSectionShown = function() end,
+    GetHelp = function() return nil end,
+    ResetSection = function() end, -- nothing set back, so no reload
+    ChangedCount = function() return 0 end,
+}
+
+-- The known key an unknown one is a slip of: the same ignoring case, or either one the start of the other, and only
+-- when a single known key fits
+local function Suggestion(key)
+    if type(key) ~= "string" then return nil end
+    local lower, found = key:lower(), nil
+    for _, field in ipairs(configFields) do
+        local known = field[1]:lower()
+        if known:sub(1, #lower) == lower or lower:sub(1, #known) == known then
+            if found then return nil end
+            found = field[1]
+        end
+    end
+    return found
+end
 
 -- An addon's mistake in its config shows once, as an error at its own CreateWindow call naming the field, not later
 -- inside the window
 local function CheckConfig(config)
     if type(config) ~= "table" then error("Krowi_Options: CreateWindow takes a config table", 3) end
     local name = tostring(config.TabName)
+    local known = {}
     for _, field in ipairs(configFields) do
+        known[field[1]] = true
         local kind = type(config[field[1]])
         if kind ~= field[2] and kind ~= field[3] then
             local allowed = field[3] and field[2] .. " or " .. field[3] or field[2]
             error(("Krowi_Options: tab %q: config.%s must be a %s, not %s"):format(name, field[1], allowed, kind), 3)
         end
+    end
+    -- Sorted, so the same config names the same key on every load
+    local unknown = {}
+    for key in next, config do
+        if not known[key] then unknown[#unknown + 1] = key end
+    end
+    if #unknown > 0 then
+        table.sort(unknown, function(a, b) return tostring(a) < tostring(b) end)
+        local suggestion = Suggestion(unknown[1])
+        error(("Krowi_Options: tab %q: config.%s is not a key the window knows%s"):format(name, tostring(unknown[1]),
+            suggestion and ("; did you mean %s?"):format(suggestion) or ""), 3)
     end
     for i, group in ipairs(config.Groups) do
         if type(group) ~= "table" or type(group.Sections) ~= "table" then
@@ -299,13 +353,21 @@ end
 -- error goes to the error handler and the tab stays registered
 function lib.CreateWindow(config)
     CheckConfig(config)
-    local registered = setmetatable({ Config = config }, tab)
+    -- The window's own copy, each field read as the check read it and a left-out optional one filled with its default,
+    -- so the window calls every field without asking whether it is there, and the addon's table stays as it gave it
+    local filled = {}
+    for _, field in ipairs(configFields) do
+        local value = config[field[1]]
+        if value == nil then value = configDefaults[field[1]] end
+        filled[field[1]] = value
+    end
+    local registered = setmetatable({ Config = filled }, tab)
     tinsert(lib.Internal.Tabs, registered)
     SortTabs()
     if lib.Internal.Frame then
         local saved = OtherSaved(registered)
         if saved then saved.Window = CopyWindow(Shared()) end
-        if config.OnCreated then Protected(config.OnCreated, lib.Internal.Frame) end
+        if filled.OnCreated then Protected(filled.OnCreated, lib.Internal.Frame) end
         lib.Internal.Frame:RefreshTabs()
     end
     return registered
