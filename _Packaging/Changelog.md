@@ -9,7 +9,7 @@ All notable changes to this project will be documented in this file.
 - Search descriptions shows on every tab
 - The window's frame is named `Krowi_Options_2_Window` (was `Krowi_OptionsWindow`), also as `lib.WindowName`
 - `CreateWindow` refuses a config with a missing required or a wrong field, and the error names it
-- `CreateWindow` needs only `TabName`, `Saved`, `Groups`, `SectionName` and `GetElements`; the other fields have defaults, and a key the window does not know is an error that names it
+- `CreateWindow` needs only `TabName`, `Saved`, `Groups`, `SectionName` and `GetElements`; the other fields have defaults (`ResetSection` and `ChangedCount` come as a pair), and a key the window does not know is an error that names it
 - The window's place, size, help pane and search ticks are kept in each addon's `saved.Window` with the time of the change, and the window opens from the newest, so the addons agree again after one of them was off for a while
 - The headers of `Krowi_Options.lua` and `RowMixins.lua` describe the whole API: the config, the element kinds, the option interface and what is public
 - A text box saves what is typed when it loses focus, as Enter does; Escape puts the saved text back

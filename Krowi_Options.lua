@@ -90,9 +90,10 @@ lib.Markup = {
     ResetSection(id) Defaults' Yes: sets the section's options back to their defaults; true when one of them needs a
                     reload, which lights the reload bar. Default: sets nothing back and lights no reload bar.
     ChangedCount(id) how many of the section's options differ from their defaults, shown beside Defaults, which is greyed
-                    out at 0. Default: 0. ResetSection and ChangedCount work as a pair: leave out both or give both. With
-                    only ChangedCount, Defaults is enabled and its Yes sets nothing back; with only ResetSection,
-                    Defaults stays greyed out and never runs it.
+                    out at 0. Default: 0. ResetSection and ChangedCount come as a pair: leave out both or give both, or
+                    CreateWindow refuses the config naming the one that is missing (with only ChangedCount Defaults
+                    would be enabled and its Yes would set nothing back; with only ResetSection it would stay greyed
+                    out and never run it).
     OnCreated(frame) called once per tab: when the window is made, or when the tab registers after that. frame.Lightbox
                     is the enlarged help picture, which the addon's Escape handling closes like a window. Default: not
                     called.
@@ -332,6 +333,13 @@ local function CheckConfig(config)
             local allowed = field[3] and field[2] .. " or " .. field[3] or field[2]
             error(("Krowi_Options: tab %q: config.%s must be a %s, not %s"):format(name, field[1], allowed, kind), 3)
         end
+    end
+    -- Defaults is enabled by ChangedCount and its Yes runs ResetSection: one without the other is a button that does
+    -- nothing or never runs
+    local hasReset, hasCount = config.ResetSection ~= nil, config.ChangedCount ~= nil
+    if hasReset ~= hasCount then
+        error(("Krowi_Options: tab %q: config.%s is missing: it comes with %s"):format(name,
+            hasReset and "ChangedCount" or "ResetSection", hasReset and "ResetSection" or "ChangedCount"), 3)
     end
     -- Sorted, so the same config names the same key on every load
     local unknown = {}

@@ -786,7 +786,10 @@ for _, case in ipairs(optional) do
     Scenario(id, ("a config without %s is refused"):format(field), {
         Observe = function()
             local lib = LoadCopy()
-            local ok, tab = pcall(lib.CreateWindow, Config({ [field] = NIL }))
+            -- ResetSection and ChangedCount come as a pair (B30): each is left out together with the other
+            local left = { [field] = NIL }
+            if field == "ResetSection" then left.ChangedCount = NIL elseif field == "ChangedCount" then left.ResetSection = NIL end
+            local ok, tab = pcall(lib.CreateWindow, Config(left))
             if not ok then return "refused: " .. tostring(tab) end
             local used, result = pcall(use, lib, tab)
             if not used then return "accepted, then raised: " .. tostring(result) end
@@ -1076,4 +1079,20 @@ Scenario("B29", "a config without IsNew: the addon's own table stays as the addo
     end,
     Recorded = "the addon's table: 10 key(s) before, 10 after, IsNew not added; the tab's IsNew a function",
     Target = "the addon's table: 10 key(s) before, 10 after, IsNew not added; the tab's IsNew a function",
+})
+
+-- Defaults is enabled by ChangedCount and its Yes runs ResetSection, so one without the other is a Defaults button that
+-- does nothing or never runs (Krowi, 2026-11-07): refused, naming the one that is missing
+Scenario("B30", "a config with ResetSection or ChangedCount but not both", {
+    Observe = function()
+        local lib = LoadCopy()
+        local function Try(left)
+            local ok, message = pcall(lib.CreateWindow, Config(left))
+            return ok and "accepted" or tostring(message):gsub("^Krowi_Options: tab \"Test\": ", "")
+        end
+        return ("without ResetSection: %s; without ChangedCount: %s; without both: %s; with both: %s"):format(
+            Try({ ResetSection = NIL }), Try({ ChangedCount = NIL }), Try({ ResetSection = NIL, ChangedCount = NIL }), Try({}))
+    end,
+    Recorded = "without ResetSection: config.ResetSection is missing: it comes with ChangedCount; without ChangedCount: config.ChangedCount is missing: it comes with ResetSection; without both: accepted; with both: accepted",
+    Target = "without ResetSection: config.ResetSection is missing: it comes with ChangedCount; without ChangedCount: config.ChangedCount is missing: it comes with ResetSection; without both: accepted; with both: accepted",
 })
