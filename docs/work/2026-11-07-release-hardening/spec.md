@@ -1,5 +1,5 @@
 # Spec: hardening before the 2.0 release
-Intent: [intent.md](intent.md). Status: accepted
+Intent: [intent.md](intent.md). Status: done
 
 ## Requirements
 New live steps in `Tests/Krowi_OptionsTests/Tests/Steps.lua`, all in the `all` set, each with a banner and a screenshot like the others. Buttons are pressed through their own `OnClick` (`:Click()`), as the existing steps do.

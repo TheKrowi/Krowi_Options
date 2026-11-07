@@ -1,5 +1,5 @@
 # Plan: hardening before the 2.0 release
-Spec: [spec.md](spec.md). Status: accepted
+Spec: [spec.md](spec.md). Status: done
 
 ## Files that change
 - `Tests/Krowi_OptionsTests/Tests/Fixtures.lua`:
@@ -36,3 +36,15 @@ Spec: [spec.md](spec.md). Status: accepted
 
 ## Proof
 Headless green; `/kotest all` 0 failures on the five clients with every new step PASS (no SKIP), `lua-errors` clean from BugGrabber on every client; screenshots of the new steps read.
+
+## Results
+- Headless: `Tests\headless\run.lua` 177 passed, 0 failed; no snapshot moved.
+- In game, `/kotest all`, 2026-11-07, this branch's library in the test addon and in KAF (`Deploy-TestAddon.ps1 -Consumers`), the kit's tools from its worktree `feature-2026-11-07-marker-click` (Krowi_ClaudeKit PR #21):
+  - Retail 12.1.5: 121 passed, 0 failed, 0 skipped (twice: 19:26 and, on the final code, 20:02).
+  - Mists 5.5.4: 119 passed, 2 failed at 19:40 (the resting mouse had brought up a row's help, which hides Show me by design; fixed in the steps: `PutHoverAway`), then 121 passed, 0 failed at 19:45.
+  - Forever 1.60.1: 120 passed, 0 failed, 1 skipped at 19:50 (`link-highlight` waited 30 s while the PC was in use); `link-highlight` again at 20:05: 21 passed, 0 failed.
+  - Era 1.15.9 and Anniversary 2.5.6: 121 passed, 0 failed, 0 skipped.
+  - Every new step passed on every client, `show-me-secure-hover` and `show-me-secure-click` through the kit's marker (a real hover and left click), and `lua-errors` read BugGrabber on all five, Era and Anniversary included.
+- Taint review of the whole library: no defect in the library ([review.md](review.md)); its two KAF findings go into a KAF work item before 105.0; the dropdown and chat box check on Retail was clean (accepted).
+- Code review of the steps (read-only agent): no false PASS; fixed from it: the stand-in lets go when a fight starts as KAF's does, a stopped run clears a click asked of the marker, the stand-in takes the left button only, `PostClick` is counted apart, a stand-in laid over a frame later is reported as such, the "before" values are taken before the scenarios, Show me's Enabled is checked after `ShowMe` answers false.
+- Afterwards: KAF's own library copy deployed back into Retail and Mists, `Krowi_OptionsTests` moved out of all five AddOns folders.

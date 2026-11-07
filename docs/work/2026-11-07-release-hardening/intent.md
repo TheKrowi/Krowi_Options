@@ -1,5 +1,5 @@
 # Intent: hardening before the 2.0 release
-Author: Krowi (maintainer), proposed by Claude. Source: idea, before the first release of Krowi_Options 2.0. Status: accepted
+Author: Krowi (maintainer), proposed by Claude. Source: idea, before the first release of Krowi_Options 2.0. Status: done
 
 ## Problem
 Krowi_Options 2.0 passes its own test addon (`/kotest all`, 88 checks, 0 failures) on Retail, Mists, Forever, Era and Anniversary, but no run presses some of the buttons a player can press:
