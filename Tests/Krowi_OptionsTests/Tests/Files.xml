@@ -5,6 +5,7 @@
 
 <Ui>
     <Script file="Fixtures.lua"/>
+    <Script file="ShowMeStandIn.lua"/>
     <Script file="Scenarios.lua"/>
     <Script file="Steps.lua"/>
     <Script file="Runner.lua"/>

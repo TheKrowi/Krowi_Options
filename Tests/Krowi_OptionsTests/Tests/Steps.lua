@@ -37,6 +37,26 @@
 --   keys: the key row's own capture: StartKeyCapture lights the button with Press a key, a key handed to the row's
 --     handler (never the game's key events, so the game binds nothing) is saved and shown, Escape clears the slot;
 --     skipped in combat
+--   show-me: Show me on Window, whose help answers what the step sets (Fixtures.lua), the pane open: shown and enabled;
+--     CanShowMe false, a click runs no ShowMe and the window stays; ShowMe false, it runs once and the window shows again
+--     on Window; ShowMe answering nothing, it runs once and the window stays closed (the step opens it again); hidden
+--     under an option's help and with the pane collapsed (docs/work/2026-11-07-release-hardening, as the next six)
+--   show-me-secure: Tooltips' help lays a secure stand-in over Show me (ShowMeSecure; ShowMeStandIn.lua, made as
+--     Krowi_AchievementFilter's map help makes its own): called with Show me's button and a close function, it lies over
+--     it within 1 px; the window moved and its drag ended (OnDragStop), it is called again and lies over it at the new
+--     place, then the window goes back; let go (called with nil) when another section is drawn, an option's help shows,
+--     the pane collapses and the window hides; answering false, Show me hides and the help's ShowMeNote shows
+--   combat: the window's own OnEvent told combat starts, then ends (its signal, not a fight): on Key bindings a capture
+--     ends and the key buttons and Reload Now grey, on Window Show me greys with the "not in combat" note; all back after
+--   defaults: on Window, Yes sets back an option that needs a reload and the reload bar lights; on Debug with two options
+--     changed and one in Tooltips: Defaults counts 2 and asks, No changes nothing, Yes runs ResetSection once for Debug,
+--     both back at their defaults on their rows, the count 0 and Defaults greyed, Tooltips' change kept
+--   execute: Debug's Reset everything runs its option once and lights the reload bar; the button beside Window's
+--     Remember main window position runs its own option once and no other
+--   all-none: Events' Seasons: None turns its four members off and All turns them on, saved and shown, the changed lines
+--     and the footer following
+--   tab-arrows: Tabs: the first row's Up and the last row's Down greyed; Down on the first row moves it second (the rows
+--     drawn in the fixture's new order), Up moves it back
 --   resize: the window's resize bounds (its width fixed, its height from MinHeight to the screen's), and a saved size
 --     outside them, applied through the window's Init, comes back inside them and writes nothing to the saved state
 --   slider-help: over a check box's slider the help explains the slider
@@ -47,6 +67,10 @@
 --     backlog #31)
 --   link-highlight, link-highlight-over, link-highlight-away: the link row's highlight is not drawn with the mouse away,
 --     is drawn with the mouse on the row and goes again, a screenshot each (the same mouse; backlog #16)
+--   show-me-secure-hover, show-me-secure-click: Tooltips' Show me with the stand-in over it and the window raised (as a
+--     click into it raises it), under the real mouse (the kit's marker: its hover, and its click where it has ClickAt;
+--     else the player's): the stand-in gets the mouse, not the library's button; a click on the spot runs its secure
+--     action once (a counting button of this addon) and its close hides the window, which the step opens again
 --   search: the found options drawn as rows under their section's name (docs/work/2026-11-03-blizzard-search);
 --     search-letter: from the first letter; search-pane: the pane explains the search, a hovered row with its section;
 --     search-broad: Search descriptions finds a word only a description holds; search-change: a check box changed in
@@ -57,8 +81,9 @@
 -- start of names (toggle, search, section), or a step's number in the banner, each with the steps it builds on and the
 -- open first.
 -- At the end every value the steps changed, the window's saved state (place, pane, search breadth, last section), its
--- reload bar and the height resize changed are put back, and the Lua errors of the session that name Krowi_Options are
--- reported from BugGrabber.
+-- reload bar, the height resize changed, the place show-me-secure moved it from, the fixture's tab order and Show me
+-- answers and the stand-in's are put back, and the Lua errors of the session that name Krowi_Options are reported from
+-- BugGrabber.
 -- Combat stops the run; the values go back once it ends. The run never sets a CVar.
 
 local _, addon = ...
@@ -1907,6 +1932,879 @@ local function ResizeStep()
     }
 end
 
+-- [[ Show me, the window's combat signal, Defaults, the buttons in rows, All / None and the tab list's arrows ]] --
+-- The release hardening (docs/work/2026-11-07-release-hardening, spec requirements 1 to 7), through the window's own
+-- functions and the buttons' own OnClick (Click(), as a player's click runs it), as the steps above. Window's Show me
+-- answers what the steps set (Fixtures.lua); Tooltips' help lays the test addon's secure stand-in over it
+-- (ShowMeStandIn.lua). No step fires a game event, binds a key or sets a CVar.
+local standIn = tests.ShowMeStandIn
+local showMeSection, secureSection = "window", "tooltips" -- the fixture's help with ShowMe, and the one with ShowMeSecure
+
+-- Where a region stands on the screen: its left, bottom, width and height times its effective scale, or nil while it has
+-- no place
+local function ScreenRect(region)
+    local left, bottom = region:GetLeft(), region:GetBottom()
+    if not left or not bottom then return nil end
+    local scale = region:GetEffectiveScale()
+    return { left * scale, bottom * scale, region:GetWidth() * scale, region:GetHeight() * scale }
+end
+
+local function RectText(rect)
+    return rect and ("%.0f,%.0f %.0fx%.0f"):format(rect[1], rect[2], rect[3], rect[4]) or "no place"
+end
+
+-- Whether the stand-in is shown over the owner, each edge within 1 on the screen, and where both stand
+local function LiesOver(owner)
+    local shown = standIn ~= nil and standIn.IsShown()
+    local mine, theirs = shown and ScreenRect(standIn.Button) or nil, ScreenRect(owner)
+    local over = mine ~= nil and theirs ~= nil
+    for i = 1, 4 do
+        if over and math.abs(mine[i] - theirs[i]) > 1 then over = false end
+    end
+    return over, ("the stand-in %s, Show me at %s"):format(shown and ("at " .. RectText(mine)) or "hidden", RectText(theirs))
+end
+
+-- The stand-in's calls after its first since: whether one handed it owner with a close function, and whether one let it go
+local function CallsSince(since, owner)
+    local laid, released = false, false
+    for i = since + 1, #standIn.Calls do
+        local call = standIn.Calls[i]
+        if call.Owner == nil then
+            released = true
+        elseif call.Owner == owner and type(call.Close) == "function" then
+            laid = true
+        end
+    end
+    return laid, released
+end
+
+-- What the help pane shows of Show me: the button, whether it takes a click, and the note beside it or in its place
+local function ShowMeState(frame)
+    local note = frame.ShowMeNote
+    return { Shown = frame.ShowMeButton:IsShown() and true or false, Enabled = frame.ShowMeButton:IsEnabled() and true or false,
+        Note = note:IsShown() and note:GetText() or nil }
+end
+
+local function ShowMeText(state)
+    return ("Show me %s%s, %s"):format(state.Shown and "shown" or "hidden", state.Shown and (state.Enabled and " and enabled" or " and greyed") or "",
+        state.Note and ("the note '" .. state.Note .. "'") or "no note")
+end
+
+-- A check read a second after its state was set finds the help of whatever row the resting mouse came to lie on, which
+-- hides Show me by design (Mists, 2026-11-07: the window lay under the pointer there). That help goes away as when the
+-- mouse leaves the row, and the line names the row; nil when no row had it
+local function PutHoverAway(frame)
+    local option = frame.HoverOption
+    if not option then return nil end
+    frame:ShowSectionHelp()
+    frame:UpdateShowMe() -- Show me was hidden until just now: a stand-in laid over it finds its place in this call
+    local ok, label = pcall(option.GetLabel, option)
+    return " (the resting mouse had brought up " .. tostring(ok and label or option.Id) .. "'s help: put away first)"
+end
+
+-- The window on a section with the help pane open
+local function OnSection(sectionId, optionId)
+    local frame = Window()
+    if frame.PaneCollapsed then frame:SetPaneCollapsed(false) end
+    frame:ShowSection(sectionId, optionId)
+    return frame
+end
+
+-- The frames Show me's spot can give the mouse to, by name (MouseOn)
+local function ShowMeParts(frame)
+    local named = { [frame.ShowMeButton] = "the library's Show me button" }
+    if standIn and standIn.Button then named[standIn.Button] = "the stand-in" end
+    return named
+end
+
+-- The window's anchors, and putting them back
+local function PointsOf(frame)
+    local points = {}
+    for i = 1, frame:GetNumPoints() do points[i] = { frame:GetPoint(i) } end
+    return points
+end
+
+local function PutPointsBack(frame, points)
+    frame:ClearAllPoints()
+    for _, point in ipairs(points) do frame:SetPoint(point[1], point[2], point[3], point[4], point[5]) end
+end
+
+-- An offset toward the screen's middle, so being kept on the screen (SetClampedToScreen) does not stop the move
+local function TowardCentre(frame)
+    local x, y = frame:GetCenter()
+    local midX, midY = UIParent:GetCenter()
+    if not x or not midX then return 40, -30 end
+    local scale = frame:GetEffectiveScale() / UIParent:GetEffectiveScale()
+    return x * scale < midX and 40 or -40, y * scale < midY and 30 or -30
+end
+
+-- Every option of a fixture section that holds a value Restore can put back: rows and what they carry, a family's
+-- members, grid cells and tabs' Show; not a button (execute) or a key row, which hold none of their own
+local function ValueOptions(sectionId)
+    local list, kept = {}, {}
+    local function Keep(option)
+        if option and not kept[option] and option.Type ~= "execute" and option.Type ~= "key" then
+            kept[option] = true
+            list[#list + 1] = option
+        end
+    end
+    for _, element in ipairs(fixtures.GetElements(sectionId)) do
+        Keep(element.Option)
+        Keep(element.With)
+        for _, member in ipairs(element.Members or {}) do Keep(member) end
+        for _, gridRow in ipairs(element.Rows or {}) do
+            for _, cell in ipairs(gridRow.Cells or {}) do Keep(cell) end
+        end
+        for _, item in ipairs(element.Items or {}) do Keep(item.Show) end
+    end
+    return list
+end
+
+-- The reload bar, lit as the window shows it
+local function ReloadLit(frame)
+    return frame.ReloadPending and frame.ReloadButton:IsShown() and frame.ReloadBackground:IsShown() and true or false
+end
+
+-- After a step's screenshot: the reload bar as it was before the run (live.ReloadBefore, which undo-reload's pattern keeps)
+local function ReloadBarBack()
+    local frame = Window()
+    frame.ReloadPending = live.ReloadBefore.Value
+    frame:RefreshFooter()
+end
+
+-- Show me on Window (spec requirement 1). Its help's CanShowMe and ShowMe answer what the step sets, and ShowMe counts its
+-- runs (Fixtures.lua). A click (WindowHelp.lua, LoadHelp) does nothing while CanShowMe is false; else it closes the window,
+-- runs ShowMe and shows the window again when ShowMe answers false. Then an option's help and the collapsed pane hide
+-- the button. The answers go back once the clicks are done (Restore too, should the step stop first).
+local function ShowMeStep()
+    local seen
+    -- Show me clicked: how often ShowMe ran, and whether the window is shown and on which section
+    local function Click(frame)
+        local runs = fixtures.ShowMeRuns or 0
+        frame.ShowMeButton:Click()
+        return { Runs = (fixtures.ShowMeRuns or 0) - runs, Shown = frame:IsShown() and true or false, Section = frame.SectionId }
+    end
+    return {
+        Name = "show-me",
+        Text = "Show me on Window: its answers, and hidden under an option's help or a collapsed pane",
+        Run = function()
+            if InCombatLockdown() then return "in combat: Show me does nothing in combat" end
+            local frame = OnSection(showMeSection, toggleId)
+            seen = { Start = ShowMeState(frame) }
+            fixtures.CanShowMeAnswer = false
+            seen.Cannot = Click(frame)
+            fixtures.CanShowMeAnswer, fixtures.ShowMeAnswer = true, false
+            seen.False = Click(frame)
+            seen.False.State = ShowMeState(frame)
+            fixtures.ShowMeAnswer = nil
+            seen.Nothing = Click(frame)
+            if not frame:IsShown() then fixtures.Tab:Open(showMeSection) end
+            seen.Nothing.Reopened = frame:IsShown() and frame.SectionId == showMeSection
+            fixtures.ShowMeAnswer, fixtures.CanShowMeAnswer = live.AnswersBefore.ShowMe, live.AnswersBefore.CanShowMe
+            local _, option = FindOption(toggleId)
+            local row = option and RowOf(option)
+            if row then
+                row:OnEnter(row.Toggle)
+                seen.Hover = { Explains = frame.HoverOption == option, State = ShowMeState(frame) }
+                row:OnLeave()
+                seen.Hover.After = ShowMeState(frame)
+            end
+            frame:SetPaneCollapsed(true)
+            seen.Collapsed = ShowMeState(frame)
+            frame:SetPaneCollapsed(false)
+            seen.Open = ShowMeState(frame)
+        end,
+        Check = function()
+            local start, cannot, answered, nothing = seen.Start, seen.Cannot, seen.False, seen.Nothing
+            Add(start.Shown and start.Enabled and "PASS" or "FAIL", ("1 on Window with the pane open: %s"):format(ShowMeText(start)))
+            Add(cannot.Runs == 0 and cannot.Shown and "PASS" or "FAIL", ("2 CanShowMe answering false, then a click: ShowMe ran %d time(s) (0 expected), the window %s"):format(
+                cannot.Runs, cannot.Shown and "stays open" or "closed"))
+            local againOk = answered.Runs == 1 and answered.Shown and answered.Section == showMeSection and answered.State.Shown and answered.State.Enabled
+            Add(againOk and "PASS" or "FAIL", ("3 ShowMe answering false, then a click: ShowMe ran %d time(s) (1 expected), the window %s on %s, %s"):format(
+                answered.Runs, answered.Shown and "shown again" or "closed", tostring(answered.Section), ShowMeText(answered.State)))
+            Add(nothing.Runs == 1 and not nothing.Shown and nothing.Reopened and "PASS" or "FAIL", ("4 ShowMe answering nothing, then a click: ShowMe ran %d time(s) (1 expected), the window %s; opened again on Window %s"):format(
+                nothing.Runs, nothing.Shown and "stays open" or "stays closed", nothing.Reopened and "yes" or "no"))
+            local hover = seen.Hover
+            if not hover then
+                Add("FAIL", ("5 an option's help: %s's row is not drawn"):format(toggleId))
+            else
+                Add(hover.Explains and not hover.State.Shown and hover.After.Shown and "PASS" or "FAIL", ("5 the mouse on %s's row: the pane %s, %s; after it left, %s"):format(
+                    toggleId, hover.Explains and "explains it" or "does not explain it", ShowMeText(hover.State), ShowMeText(hover.After)))
+            end
+            Add(not seen.Collapsed.Shown and seen.Open.Shown and "PASS" or "FAIL", ("6 the pane collapsed: %s; open again: %s"):format(
+                ShowMeText(seen.Collapsed), ShowMeText(seen.Open)))
+        end
+    }
+end
+
+-- Show me with a secure button laid over it (spec requirement 2), the library's side of KAF's map help: Tooltips' help has
+-- ShowMeSecure, served by the stand-in, which records each call. WindowHelp.lua's UpdateShowMe calls it with Show me's
+-- button and a close function whenever Tooltips' own help is drawn with the pane open, again after the window's drag ends
+-- (WindowLayout.lua, OnDragStop), and with nil as soon as that help is not drawn. The window is moved by its anchors and
+-- told its drag ended, as a drag does; then it is put back and told again, so its saved place is the old one (Restore
+-- puts the anchors back too, should the step stop between). Each let-go is undone again and the stand-in must lie over
+-- Show me again after it. An error in ShowMeSecure is proven headless only (ContractAndErrors 16j): in game a deliberate
+-- error would fail the run's lua-errors step.
+local secureHoverId = "tooltips.details" -- the row whose help hides Show me
+
+local function ShowMeSecureStep()
+    local seen
+    -- What act did (a let-go call, the stand-in hidden), then what undo did (laid over Show me again); act returns why it
+    -- could not act
+    local function LetGo(frame, what, act, undo)
+        local button = frame.ShowMeButton
+        local mark = #standIn.Calls
+        local result = { What = what, Missing = act() }
+        if not result.Missing then
+            local _, released = CallsSince(mark, button)
+            result.Released, result.Hidden = released, not standIn.IsShown()
+            mark = #standIn.Calls
+            undo()
+            result.Again = (CallsSince(mark, button))
+            result.Over = (LiesOver(button))
+            -- Show me hidden just before can have no place yet in this call: the stand-in then lies over it a frame later,
+            -- as KAF's does; check 8 reads the final place
+            result.Pending = not result.Over and standIn.Pending
+        end
+        return result
+    end
+    return {
+        Name = "show-me-secure",
+        Text = "Tooltips' Show me with a secure stand-in: laid over, moved along, let go, refused",
+        Run = function()
+            if InCombatLockdown() then return "in combat: the stand-in is laid over out of combat only" end
+            if not standIn then return "no stand-in: ShowMeStandIn.lua did not load" end
+            local frame = Window()
+            local button = frame.ShowMeButton
+            wipe(standIn.Calls)
+            seen = {}
+            -- 1 drawn with the pane open
+            OnSection(secureSection)
+            seen.Drawn = { Called = (CallsSince(0, button)) }
+            seen.Drawn.Over, seen.Drawn.Where = LiesOver(button)
+            -- 2 moved, then back to its place
+            local points = PointsOf(frame)
+            live.PointBefore = { Points = points }
+            local dx, dy = TowardCentre(frame)
+            local before = ScreenRect(button)
+            local mark = #standIn.Calls
+            frame:ClearAllPoints()
+            for _, point in ipairs(points) do frame:SetPoint(point[1], point[2], point[3], point[4] + dx, point[5] + dy) end
+            frame:OnDragStop()
+            local after = ScreenRect(button)
+            local moved = before ~= nil and after ~= nil and (math.abs(after[1] - before[1]) > 1 or math.abs(after[2] - before[2]) > 1)
+            seen.Moved = { Called = (CallsSince(mark, button)), Moved = moved,
+                By = before and after and ("%.0f,%.0f"):format(after[1] - before[1], after[2] - before[2]) or "?" }
+            seen.Moved.Over, seen.Moved.Where = LiesOver(button)
+            PutPointsBack(frame, points)
+            frame:OnDragStop()
+            live.PointBefore.Done = true
+            seen.Back = {}
+            seen.Back.Over, seen.Back.Where = LiesOver(button)
+            -- 3 to 6 let go, each undone
+            local row
+            seen.LetGo = {
+                LetGo(frame, "another section drawn (Debug)", function() frame:ShowSection("debug") end,
+                    function() frame:ShowSection(secureSection) end),
+                LetGo(frame, "an option's help shown", function()
+                    local _, option = FindOption(secureHoverId)
+                    row = option and RowOf(option)
+                    if not row then return secureHoverId .. "'s row is not drawn" end
+                    row:OnEnter(row.Toggle)
+                end, function() row:OnLeave() end),
+                LetGo(frame, "the pane collapsed", function() frame:SetPaneCollapsed(true) end, function() frame:SetPaneCollapsed(false) end),
+                LetGo(frame, "the window hidden", function() frame:Hide() end, function() fixtures.Tab:Open(secureSection) end),
+            }
+            -- 7 answering false, then 8 true again (read at the check, as the screenshot shows it)
+            standIn.AnswerFalse = true
+            frame:Refresh()
+            local help = fixtures.Tab.Config.GetHelp(secureSection)
+            seen.Refused = { State = ShowMeState(frame), Hidden = not standIn.IsShown(), Note = help and help.ShowMeNote }
+            standIn.AnswerFalse = false
+            frame:Refresh()
+        end,
+        Check = function()
+            local frame = Window()
+            local drawn, moved = seen.Drawn, seen.Moved
+            Add(drawn.Called and drawn.Over and "PASS" or "FAIL", ("1 Tooltips drawn, the pane open: ShowMeSecure %s with Show me's button and a close function; %s"):format(
+                drawn.Called and "called" or "not called", drawn.Where))
+            if not moved.Moved then
+                Add("SKIP", ("2 the window moved by its anchors and its drag end: Show me moved by %s, so the window could not move (it fills the screen)"):format(moved.By))
+            else
+                Add(moved.Called and moved.Over and seen.Back.Over and "PASS" or "FAIL", ("2 the window moved (Show me by %s) and its drag ended: ShowMeSecure %s; %s; back at its place, %s"):format(
+                    moved.By, moved.Called and "called again" or "not called again", moved.Where, seen.Back.Over and "over Show me there too" or seen.Back.Where))
+            end
+            for i, result in ipairs(seen.LetGo) do
+                if result.Missing then
+                    Add("FAIL", ("%d %s: %s"):format(2 + i, result.What, result.Missing))
+                else
+                    Add(result.Released and result.Hidden and result.Again and (result.Over or result.Pending) and "PASS" or "FAIL", ("%d %s: %s, the stand-in %s; after it, %s"):format(
+                        2 + i, result.What, result.Released and "let go (called with nil)" or "not let go", result.Hidden and "hidden" or "still shown",
+                        result.Again and result.Over and "laid over Show me again"
+                            or result.Again and result.Pending and "called again, laid over next frame (Show me had no place yet)"
+                            or result.Again and "called again but not over Show me" or "not called again"))
+                end
+            end
+            local refused = seen.Refused
+            local note = type(refused.Note) == "string" and refused.Note or nil
+            Add(not refused.State.Shown and refused.Hidden and note ~= nil and refused.State.Note == note and "PASS" or "FAIL", ("%d the stand-in answering false: %s ('%s' expected), the stand-in %s"):format(
+                3 + #seen.LetGo, ShowMeText(refused.State), tostring(note), refused.Hidden and "hidden" or "shown"))
+            local hovered = PutHoverAway(frame)
+            local over, where = LiesOver(frame.ShowMeButton)
+            local state = ShowMeState(frame)
+            Add(over and state.Shown and not state.Note and "PASS" or "FAIL", ("%d answering true again: %s; %s%s"):format(4 + #seen.LetGo, ShowMeText(state), where,
+                hovered or ""))
+        end
+    }
+end
+
+-- The window told combat starts and ends (spec requirement 3): its own OnEvent with PLAYER_REGEN_DISABLED, then
+-- PLAYER_REGEN_ENABLED, called directly. That is the window's signal, the path the game's event takes, not a fight: a run
+-- cannot start one, and the runner stops in a real one. What only InCombatLockdown() guards (Show me's click, a key
+-- capture's start and end) is not covered. In the start's refresh the window counts as in combat (CombatStarting,
+-- WindowMixin.lua) and greys what cannot run in it; the end's refresh enables it again. On Key bindings, with a capture
+-- open: the capture ends, the key buttons and Reload Now grey (Reload Now whether its bar shows or not). On Window, Show
+-- me greys with the "not in combat" note. The start is told once more for the screenshot, the end after it (Restore too).
+local function CombatStep()
+    local seen
+    -- The key rows as drawn: how many key buttons show and how many take a click, Reload Now, and the capture of the row
+    local function ReadKeys(frame, option)
+        local count, enabled = 0, 0
+        ForEachRow(function(row)
+            if row.Option and row.Option.Type == "key" then
+                for _, button in ipairs({ row.Key1, row.Key2 }) do
+                    if button:IsShown() then
+                        count = count + 1
+                        if button:IsEnabled() then enabled = enabled + 1 end
+                    end
+                end
+            end
+        end)
+        local row = RowOf(option)
+        return { Count = count, Enabled = enabled, Reload = frame.ReloadButton:IsEnabled() and true or false,
+            Capturing = row and row.Capturing, Keyboard = row ~= nil and row.Key1:IsKeyboardEnabled() and true or false }
+    end
+    local function KeysText(read)
+        return ("%d of %d key buttons enabled, Reload Now %s"):format(read.Enabled, read.Count, read.Reload and "enabled" or "greyed")
+    end
+    return {
+        Name = "combat",
+        Text = "the window's own combat signal (no fight): key buttons, Reload Now and Show me grey, then return",
+        Run = function()
+            if InCombatLockdown() then return "in combat: the step tells the window combat starts, out of combat only" end
+            local frame = Window()
+            local sectionId, option = FindOption(keyId)
+            if not option or not option.Slots then return keyId .. " is no key option in any section" end
+            frame:ShowSection(sectionId, keyId)
+            local row = RowOf(option)
+            if not row then return "its row is not drawn" end
+            seen = {}
+            row:StartKeyCapture(1)
+            seen.Captured = row.Capturing == 1
+            frame:OnEvent("PLAYER_REGEN_DISABLED")
+            seen.KeysStart = ReadKeys(frame, option)
+            frame:EndKeyCaptures() -- should the start have left the capture open, no button keeps the keyboard
+            frame:OnEvent("PLAYER_REGEN_ENABLED")
+            seen.KeysEnd = ReadKeys(frame, option)
+            OnSection(showMeSection)
+            seen.Before = ShowMeState(frame)
+            frame:OnEvent("PLAYER_REGEN_DISABLED")
+            seen.Start = ShowMeState(frame)
+            frame:OnEvent("PLAYER_REGEN_ENABLED")
+            seen.End = ShowMeState(frame)
+            live.CombatSignalled = true
+            frame:OnEvent("PLAYER_REGEN_DISABLED")
+        end,
+        Check = function()
+            local frame = Window()
+            local notInCombat = frame.Strings.NotInCombat
+            local start, ended = seen.KeysStart, seen.KeysEnd
+            local captureEnded = seen.Captured and start.Capturing == nil and not start.Keyboard
+            Add(start.Count > 0 and start.Enabled == 0 and not start.Reload and captureEnded and "PASS" or "FAIL", ("1 Key bindings, the window's own signal that combat starts (not a fight): %s; the open capture %s"):format(
+                KeysText(start), not seen.Captured and "did not start" or captureEnded and "ended" or "stays open"))
+            Add(ended.Count > 0 and ended.Enabled == ended.Count and ended.Reload and "PASS" or "FAIL", ("2 the window's signal that combat ends: %s"):format(KeysText(ended)))
+            local before, greyed, back = seen.Before, seen.Start, seen.End
+            Add(before.Shown and greyed.Shown and not greyed.Enabled and greyed.Note == notInCombat and "PASS" or "FAIL", ("3 Window, combat starts: %s ('%s' expected), before it %s"):format(
+                ShowMeText(greyed), tostring(notInCombat), ShowMeText(before)))
+            Add(back.Shown and back.Enabled and not back.Note and "PASS" or "FAIL", ("4 Window, combat ends: %s"):format(ShowMeText(back)))
+            -- Putting a hovered row's help away refreshes Show me out of the signal, so the signal is sent once more after it
+            local hovered = PutHoverAway(frame)
+            if hovered then frame:OnEvent("PLAYER_REGEN_DISABLED") end
+            local shot = ShowMeState(frame)
+            Add(shot.Shown and not shot.Enabled and shot.Note == notInCombat and "PASS" or "FAIL", ("5 told again for the screenshot: %s%s"):format(ShowMeText(shot),
+                hovered or ""))
+            After(afterShot / 2, function()
+                live.CombatSignalled = nil
+                Window():OnEvent("PLAYER_REGEN_ENABLED")
+            end)
+        end
+    }
+end
+
+-- Defaults (spec requirement 4), clicked through Click(): it asks in the page's header (Yes in its place, No beside it),
+-- No ends the question, Yes runs the fixture's ResetSection, which counts its calls per section (Fixtures.lua,
+-- ResetCalls) and answers whether an option it set back needs a reload (WindowPage.lua, ResetSection). First Window with
+-- Use the old look changed, which needs a reload: the reload bar is put out first, so what lights it is Yes. Then Debug,
+-- where the steps before may have left an option changed (dropdown's Profile): those are set back through their options,
+-- then Trace calls and Log file are changed through their rows and Tooltips' Compact lines through its option, so Debug
+-- counts exactly 2. Every option of both sections is remembered first, since Yes sets them all back. The reload bar goes
+-- back after the screenshot (Restore too).
+local defaultsToggleId, defaultsInputId, elsewhereId, reloadOptionId = "debug.trace", "debug.logFile", "tooltips.compact", "window.oldLook"
+local typedLog = "test.log"
+
+local function DefaultsStep()
+    local seen
+    -- The page's header: the changed count and whether the footer agrees, its text, Defaults (enabled, or reading Yes) and No
+    local function Header(frame, sectionId)
+        local footer, count = FooterAgrees(sectionId)
+        return { Count = count, Footer = footer, Text = frame.ChangedText:GetText() or "", Enabled = frame.DefaultsButton:IsEnabled() and true or false,
+            Yes = frame.DefaultsButton:GetText() == YES, No = frame.CancelButton:IsShown() and true or false }
+    end
+    local function Resets(sectionId)
+        return fixtures.ResetCalls[sectionId] or 0
+    end
+    return {
+        Name = "defaults",
+        Text = "Defaults asks, No keeps all, Yes sets the section back; a reload's reset lights the bar",
+        Run = function()
+            local frame = Window()
+            local reloadSection, reloadOption = FindOption(reloadOptionId)
+            local debugSection, toggle = FindOption(defaultsToggleId)
+            local _, input = FindOption(defaultsInputId)
+            local elsewhereSection, elsewhere = FindOption(elsewhereId)
+            if not (reloadOption and toggle and input and elsewhere) then
+                return ("%s, %s, %s or %s is in no section"):format(reloadOptionId, defaultsToggleId, defaultsInputId, elsewhereId)
+            end
+            seen = { Section = debugSection, ElsewhereSection = elsewhereSection, Toggle = toggle, Input = input, Elsewhere = elsewhere,
+                Question = frame.Strings.ResetSection:format(fixtures.SectionName(debugSection)) }
+            -- 1 the reload
+            live.ReloadBefore = live.ReloadBefore or { Value = frame.ReloadPending }
+            for _, option in ipairs(ValueOptions(reloadSection)) do Remember(option) end
+            frame:ShowSection(reloadSection, reloadOptionId)
+            local row = RowOf(reloadOption)
+            if not row then return reloadOptionId .. "'s row is not drawn" end
+            if not reloadOption:IsChanged() then row.Toggle:Click() end
+            frame.ReloadPending = nil
+            frame:RefreshFooter()
+            local before = Resets(reloadSection)
+            seen.Reload = { Changed = reloadOption:IsChanged(), Out = not frame.ReloadButton:IsShown() }
+            frame.DefaultsButton:Click()
+            seen.Reload.Asked = frame.CancelButton:IsShown() and true or false
+            frame.DefaultsButton:Click()
+            seen.Reload.Resets = Resets(reloadSection) - before
+            seen.Reload.Back = not reloadOption:IsChanged()
+            seen.Reload.Lit = ReloadLit(frame)
+            -- 2 to 5 Debug
+            for _, option in ipairs(ValueOptions(debugSection)) do
+                Remember(option)
+                if option:IsChanged() then option:Reset() end
+            end
+            Remember(elsewhere)
+            if not elsewhere:IsChanged() then elsewhere:Set(not elsewhere:Get()) end
+            frame:ShowSection(debugSection, defaultsToggleId)
+            row = RowOf(toggle)
+            if row then row.Toggle:Click() end
+            row = RowOf(input)
+            if row then
+                row.Input:SetText(typedLog)
+                row.Input:GetScript("OnEnterPressed")(row.Input)
+            end
+            seen.Changed = Header(frame, debugSection)
+            seen.Changed.Toggle, seen.Changed.Input = toggle:IsChanged(), input:IsChanged()
+            frame.DefaultsButton:Click()
+            seen.Asked = Header(frame, debugSection)
+            before = Resets(debugSection)
+            frame.CancelButton:Click()
+            seen.No = Header(frame, debugSection)
+            seen.No.Resets, seen.No.Toggle, seen.No.Input = Resets(debugSection) - before, toggle:IsChanged(), input:IsChanged()
+            frame.DefaultsButton:Click()
+            frame.DefaultsButton:Click()
+            seen.YesResets = Resets(debugSection) - before
+        end,
+        Check = function()
+            local frame = Window()
+            local reload = seen.Reload
+            Add(reload.Changed and reload.Out and reload.Asked and reload.Resets == 1 and reload.Back and reload.Lit and "PASS" or "FAIL",
+                ("1 Window with %s changed and the reload bar put out (%s): Defaults %s, Yes ran ResetSection %d time(s) (1 expected), the option %s, the reload bar %s"):format(
+                    reloadOptionId, reload.Out and "out" or "still lit", reload.Asked and "asked" or "did not ask", reload.Resets,
+                    reload.Back and "back at its default" or "still changed", reload.Lit and "lit" or "not lit"))
+            local changed = seen.Changed
+            Add(changed.Toggle and changed.Input and changed.Count == 2 and changed.Footer and changed.Enabled and "PASS" or "FAIL",
+                ("2 %s with %s and %s changed through their rows (and %s): it counts %d (2 expected), the footer %s ('%s'), Defaults %s"):format(
+                    seen.Section, defaultsToggleId, defaultsInputId, elsewhereId, changed.Count, changed.Footer and "follows" or "wrong", changed.Text,
+                    changed.Enabled and "enabled" or "greyed"))
+            local asked = seen.Asked
+            Add(asked.Yes and asked.No and asked.Text == seen.Question and "PASS" or "FAIL", ("3 Defaults: the header asks '%s' ('%s' expected), Defaults reads %s, No %s"):format(
+                asked.Text, seen.Question, asked.Yes and "Yes" or "something else", asked.No and "shown" or "hidden"))
+            local no = seen.No
+            Add(no.Resets == 0 and no.Toggle and no.Input and not no.No and not no.Yes and no.Count == 2 and no.Footer and "PASS" or "FAIL",
+                ("4 No: ResetSection ran %d time(s) (0 expected), both options %s, the question %s, the count %d"):format(no.Resets,
+                    no.Toggle and no.Input and "still changed" or "set back", not no.No and not no.Yes and "gone" or "still asked", no.Count))
+            -- 5 read as the screenshot shows it
+            local toggle, input = seen.Toggle, seen.Input
+            local toggleRow, inputRow = RowOf(toggle), RowOf(input)
+            local back = not toggle:IsChanged() and not input:IsChanged()
+            local rows = toggleRow ~= nil and inputRow ~= nil and (toggleRow.Toggle:GetChecked() and true or false) == (toggle:Get() and true or false)
+                and not toggleRow.ChangedBar:IsShown() and inputRow.Input:GetText() == tostring(input:Get()) and not inputRow.ChangedBar:IsShown()
+            local header = Header(frame, seen.Section)
+            local kept = seen.Elsewhere:IsChanged() and fixtures.ChangedCount(seen.ElsewhereSection) > 0
+            Add(seen.YesResets == 1 and back and rows and header.Count == 0 and header.Footer and not header.Enabled and kept and "PASS" or "FAIL",
+                ("5 Defaults, then Yes: ResetSection ran %d time(s) for %s (1 expected), both options %s, their rows %s, the count %d, Defaults %s, %s %s"):format(
+                    seen.YesResets, seen.Section, back and "back at their defaults" or "still changed", rows and "show it" or "do not show it",
+                    header.Count, header.Enabled and "enabled" or "greyed", elsewhereId, kept and "still changed" or "set back too"))
+            After(afterShot / 2, ReloadBarBack)
+        end
+    }
+end
+
+-- Buttons in rows (spec requirement 5), clicked through Click(): a button row (Debug's Reset everything, which needs a
+-- reload) and the button beside a check box (Window's Reset main window position, the With of Remember main window
+-- position). The fixture's button options count their runs in Set (Fixtures.lua, Runs), and every button of the fixture
+-- is counted before and after each click, so a click that runs another one shows. The reload bar is put out first, so
+-- what lights it is the click; it goes back after the screenshot (Restore too).
+local plainButtonId, besideButtonId = "debug.resetAll", "window.resetMain"
+
+local function ExecuteStep()
+    local seen
+    local function Buttons()
+        local list = {}
+        for _, option in next, fixtures.Options do
+            if option.Type == "execute" then list[#list + 1] = option end
+        end
+        table.sort(list, function(a, b) return a.Id < b.Id end)
+        return list
+    end
+    local function Runs(buttons)
+        local runs = {}
+        for i, option in ipairs(buttons) do runs[i] = option.Runs or 0 end
+        return runs
+    end
+    -- The buttons that ran since before, as "id xN"
+    local function Ran(buttons, before)
+        local ran = {}
+        for i, option in ipairs(buttons) do
+            local count = (option.Runs or 0) - before[i]
+            if count ~= 0 then ran[#ran + 1] = ("%s x%d"):format(option.Id, count) end
+        end
+        return ran
+    end
+    -- The check box that carries a button as its With: its section, the check box and the button
+    local function FindBeside(withId)
+        for _, sectionId in ipairs(fixtures.Sections) do
+            for _, element in ipairs(fixtures.GetElements(sectionId)) do
+                if element.With and element.With.Id == withId then return sectionId, element.Option, element.With end
+            end
+        end
+    end
+    local function OnlyOnce(ran, option)
+        return #ran == 1 and ran[1] == option.Id .. " x1"
+    end
+    return {
+        Name = "execute",
+        Text = "a button row and a check box's button each run their own option once",
+        Run = function()
+            local frame = Window()
+            local plainSection, plain = FindOption(plainButtonId)
+            local besideSection, owner, beside = FindBeside(besideButtonId)
+            if not plain or not beside then return ("%s or %s is in no section"):format(plainButtonId, besideButtonId) end
+            local buttons = Buttons()
+            frame:ShowSection(plainSection, plainButtonId)
+            local row = RowOf(plain)
+            if not row then return plainButtonId .. "'s row is not drawn" end
+            seen = { Plain = plain, Beside = beside, Owner = owner }
+            live.ReloadBefore = live.ReloadBefore or { Value = frame.ReloadPending }
+            frame.ReloadPending = nil
+            frame:RefreshFooter()
+            seen.Out = not frame.ReloadButton:IsShown()
+            local before = Runs(buttons)
+            row.Execute:Click()
+            seen.PlainRan, seen.Lit = Ran(buttons, before), ReloadLit(frame)
+            frame:ShowSection(besideSection, besideButtonId)
+            row = RowOf(owner)
+            if not row then
+                seen.BesideMissing = true
+                return
+            end
+            local value = owner:Get()
+            before = Runs(buttons)
+            row.Execute:Click()
+            seen.BesideRan, seen.Kept = Ran(buttons, before), owner:Get() == value
+        end,
+        Check = function()
+            local plain, beside = seen.Plain, seen.Beside
+            Add(OnlyOnce(seen.PlainRan, plain) and seen.Out and seen.Lit and "PASS" or "FAIL", ("1 the %s row's button: ran [%s] (%s x1 expected), the reload bar put out first %s, after the click %s"):format(
+                plain.Id, table.concat(seen.PlainRan, ", "), plain.Id, seen.Out and "yes" or "no", seen.Lit and "lit" or "not lit"))
+            if seen.BesideMissing then
+                Add("FAIL", ("2 the button beside %s: its row is not drawn"):format(seen.Owner.Id))
+            else
+                Add(OnlyOnce(seen.BesideRan, beside) and seen.Kept and "PASS" or "FAIL", ("2 the button beside %s: ran [%s] (%s x1 expected), the check box %s"):format(
+                    seen.Owner.Id, table.concat(seen.BesideRan, ", "), beside.Id, seen.Kept and "unchanged" or "changed"))
+            end
+            After(afterShot / 2, ReloadBarBack)
+        end
+    }
+end
+
+-- A family's All / None (spec requirement 6): Events' Seasons heading, its buttons clicked through Click(). Each sets
+-- every member that is not greyed and redraws through OnOptionChanged (RowMixins.lua, SubRowMixin); then each member is
+-- read: its saved value, its check box, its changed line, and the footer's count.
+local familySection = "events"
+
+local function AllNoneStep()
+    local seen
+    -- The first family heading the page draws, and its row
+    local function Family()
+        for _, element in ipairs(Window().Elements or {}) do
+            if element.Kind == "Sub" then return element, RowOfElement(element) end
+        end
+    end
+    local function Read(members, want)
+        local wrong = {}
+        for _, member in ipairs(members) do
+            local row = RowOf(member)
+            local saved = (member:Get() and true or false) == want
+            local ticked = row ~= nil and (row.Toggle:GetChecked() and true or false) == want
+            local line = row ~= nil and row.ChangedBar:IsShown() == member:IsChanged()
+            if not (saved and ticked and line) then
+                wrong[#wrong + 1] = ("%s (saved %s, %s, changed line %s)"):format(member:GetLabel(), tostring(member:Get()),
+                    not row and "not drawn" or row.Toggle:GetChecked() and "ticked" or "unticked", line and "follows" or "wrong")
+            end
+        end
+        local footer, count = FooterAgrees(familySection)
+        return { Wrong = wrong, Footer = footer, Count = count }
+    end
+    return {
+        Name = "all-none",
+        Text = "a family's None turns every member off and All turns them on, saved and shown",
+        Run = function()
+            Window():ShowSection(familySection)
+            local element, row = Family()
+            if not element then return familySection .. " draws no family heading" end
+            if not row then return "the family's row is not drawn" end
+            seen = { Name = element.Text, Members = element.Members }
+            for _, member in ipairs(element.Members) do Remember(member) end
+            row.None:Click()
+            seen.None = Read(element.Members, false)
+            element, row = Family()
+            if row then
+                row.All:Click()
+                seen.All = Read(element.Members, true)
+            end
+        end,
+        Check = function()
+            local function Report(number, button, read, state)
+                if not read then
+                    Add("FAIL", ("%d %s on %s: the family's row is not drawn after None"):format(number, button, tostring(seen.Name)))
+                    return
+                end
+                Add(#read.Wrong == 0 and read.Footer and "PASS" or "FAIL", ("%d %s on %s: its %d members %s%s, the footer %s (%d changed)"):format(
+                    number, button, tostring(seen.Name), #seen.Members, state,
+                    #read.Wrong > 0 and (", except [" .. table.concat(read.Wrong, "; ") .. "]") or ", saved and shown, their changed lines following",
+                    read.Footer and "follows" or "wrong", read.Count))
+            end
+            Report(1, "None", seen.None, "off")
+            Report(2, "All", seen.All, "on")
+        end
+    }
+end
+
+-- The tab list's arrows (spec requirement 7), clicked through Click(): the fixture's tab order moves (Fixtures.lua,
+-- TabItems) and the page is drawn again (RowMixins.lua, TabRowMixin). The rows are read as drawn, top first: each row's
+-- position and name (its Show's, or its source for Blizzard's tab, which has no Show), against the names the fixture's
+-- order gives. Restore puts the order back too.
+local tabsSection = "tabs"
+
+local function TabArrowsStep()
+    local seen
+    local function DrawnTabs()
+        local rows = {}
+        ForEachRow(function(row)
+            if row.Element and row.Element.Kind == "TabRow" and row:IsVisible() then rows[#rows + 1] = row end
+        end)
+        table.sort(rows, function(a, b) return (a:GetTop() or 0) > (b:GetTop() or 0) end)
+        return rows
+    end
+    local function Drawn(rows)
+        local names = {}
+        for i, row in ipairs(rows) do
+            local name = row.Label:GetText()
+            if not name or name == "" then name = row.Source:GetText() end
+            names[i] = ("%s %s"):format(tostring(row.Position:GetText()), tostring(name))
+        end
+        return table.concat(names, ", ")
+    end
+    -- The fixture's Show options are tabs.<key> (Fixtures.lua); Blizzard's tab has none and its row shows its source
+    local function Expected(order)
+        local names = {}
+        for i, key in ipairs(order) do
+            local show = fixtures.Options["tabs." .. key]
+            names[i] = ("%d %s"):format(i, show and show:GetLabel() or "Blizzard")
+        end
+        return table.concat(names, ", ")
+    end
+    local function Read(rows)
+        local order = fixtures.GetTabOrder()
+        return { Order = order, Drawn = Drawn(rows), Expected = Expected(order) }
+    end
+    return {
+        Name = "tab-arrows",
+        Text = "the tab list's arrows: greyed at the ends, Down and Up move a tab and the rows follow",
+        Run = function()
+            Window():ShowSection(tabsSection)
+            local rows = DrawnTabs()
+            if #rows < 2 then return ("%s draws %d tab rows, two or more needed"):format(tabsSection, #rows) end
+            seen = { Start = Read(rows) }
+            seen.FirstUp, seen.LastDown = rows[1].Up:IsEnabled() and true or false, rows[#rows].Down:IsEnabled() and true or false
+            rows[1].Down:Click()
+            rows = DrawnTabs()
+            seen.Down = Read(rows)
+            if rows[2] and rows[2].Up:IsEnabled() then
+                rows[2].Up:Click()
+            else
+                seen.UpWhy = rows[2] and "the second row's Up is greyed" or "no second row"
+            end
+            seen.Up = Read(DrawnTabs())
+        end,
+        Check = function()
+            local start, down, up = seen.Start, seen.Down, seen.Up
+            local order = start.Order
+            Add(not seen.FirstUp and not seen.LastDown and start.Drawn == start.Expected and "PASS" or "FAIL", ("1 %s: the first row's Up %s, the last row's Down %s; drawn [%s], the fixture's order [%s]"):format(
+                tabsSection, seen.FirstUp and "enabled (greyed expected)" or "greyed", seen.LastDown and "enabled (greyed expected)" or "greyed", start.Drawn, start.Expected))
+            local swapped = #down.Order == #order and down.Order[1] == order[2] and down.Order[2] == order[1]
+            for i = 3, #order do
+                if down.Order[i] ~= order[i] then swapped = false end
+            end
+            Add(swapped and down.Drawn == down.Expected and "PASS" or "FAIL", ("2 Down on the first row: the fixture's order [%s] (its first two swapped expected), drawn [%s]"):format(
+                table.concat(down.Order, ", "), down.Drawn))
+            local same = #up.Order == #order
+            for i = 1, #order do
+                if up.Order[i] ~= order[i] then same = false end
+            end
+            Add(not seen.UpWhy and same and up.Drawn == start.Expected and "PASS" or "FAIL", ("3 Up on the second row%s: the fixture's order [%s] ([%s] expected), drawn [%s]"):format(
+                seen.UpWhy and (" (" .. seen.UpWhy .. ")") or "", table.concat(up.Order, ", "), table.concat(order, ", "), up.Drawn))
+        end
+    }
+end
+
+-- A frame of this addon that hears the game's GLOBAL_MOUSE_UP while show-me-secure-click waits, so a click on Show me's
+-- spot that reaches no stand-in is a finding rather than a wait that runs out (every client has the event, its
+-- Blizzard_APIDocumentationGenerated says). onUp(mouseButton), or nil to stop listening.
+local clickWatcher
+
+local function WatchClicks(onUp)
+    if not onUp then
+        if clickWatcher then
+            clickWatcher.OnUp = nil
+            clickWatcher:UnregisterAllEvents()
+        end
+        return
+    end
+    if not clickWatcher then
+        clickWatcher = CreateFrame("Frame")
+        clickWatcher:SetScript("OnEvent", function(self, _, mouseButton)
+            if self.OnUp then self.OnUp(mouseButton) end
+        end)
+    end
+    clickWatcher.OnUp = onUp
+    pcall(clickWatcher.RegisterEvent, clickWatcher, "GLOBAL_MOUSE_UP")
+end
+
+-- Show me's stand-in under the real mouse (spec requirement 2, its mouse part), as toggle-reset-clipped: the kit's marker
+-- (KrowiGameInput) serves the hover and, where it has ClickAt (Krowi_ClaudeKit's docs/work/2026-11-07-marker-click), the
+-- click; without the marker, or with an older one that cannot click, the player within mouseWait. The window is raised
+-- first (Raise, what a click into it does: a toplevel window lifts its own buttons over anything in its strata, which is
+-- why the stand-in lies one strata higher). The hover holds once the stand-in's OnEnter ran, or once the cursor stayed
+-- on Show me's spot without it (the finding). The click holds once the stand-in's secure action counted, or once a left
+-- click on the spot counted nothing (heard as GLOBAL_MOUSE_UP there). The click hides the window through the stand-in's
+-- PostClick; the step opens it again on Tooltips for the steps after.
+local function SecureMouseSteps()
+    local hover, click
+    local function Prepare()
+        if InCombatLockdown() then return "in combat: the stand-in is laid over out of combat only" end
+        if not standIn then return "no stand-in: ShowMeStandIn.lua did not load" end
+        local frame = OnSection(secureSection)
+        -- Show me was hidden on the section before, so the stand-in may have waited a frame for its place; once more
+        -- now that Show me is shown (these steps test the mouse, not that timing)
+        frame:UpdateShowMe()
+        frame:Raise()
+        local over, where = LiesOver(frame.ShowMeButton)
+        if not over then return ("the stand-in does not lie over Show me (%s): show-me-secure tells why"):format(where) end
+    end
+    return {
+        Name = "show-me-secure-hover",
+        Text = ("hover Show me, the window raised: the secure stand-in over it gets the mouse (%d s)"):format(mouseWait),
+        Run = function()
+            local why = Prepare()
+            if why then return why end
+            hover = { EnteredBefore = standIn.Entered }
+        end,
+        Hover = function(kit)
+            kit.HoverAt(Window().ShowMeButton, 0, 0)
+        end,
+        Mouse = function()
+            return Settled(hover, standIn.Entered > hover.EnteredBefore or Window().ShowMeButton:IsMouseOver())
+        end,
+        Check = function()
+            local frame = Window()
+            local entered = standIn.Entered > hover.EnteredBefore
+            local got = entered or HasMouse(standIn.Button)
+            local library = HasMouse(frame.ShowMeButton)
+            local _, where = LiesOver(frame.ShowMeButton)
+            Add(got and not library and "PASS" or "FAIL", ("with the window raised and the mouse on Show me's spot: the stand-in's OnEnter %s, the mouse is on %s; %s"):format(
+                entered and "ran" or "did not run", MouseOn(ShowMeParts(frame)), where))
+        end
+    }, {
+        Name = "show-me-secure-click",
+        Text = ("click Show me: the secure stand-in's click runs once and closes the window (%d s)"):format(mouseWait),
+        Run = function()
+            local why = Prepare()
+            if why then return why end
+            click = { ClicksBefore = standIn.Clicks, PostClicksBefore = standIn.PostClicks }
+            WatchClicks(function(mouseButton)
+                local frame = Window()
+                if live and live.StepName == "show-me-secure-click" and click and not click.UpAt and mouseButton == "LeftButton"
+                    and frame and frame:IsShown() and frame.ShowMeButton:IsMouseOver() then
+                    click.UpAt, click.UpOn = GetTime(), MouseOn(ShowMeParts(frame))
+                end
+            end)
+        end,
+        -- Once: the marker keeps a request until the step clears it, and serves it once
+        Hover = function(kit)
+            if kit.ClickAt and not click.Asked then
+                click.Asked = kit.ClickAt(Window().ShowMeButton, 0, 0) and true or false
+            end
+        end,
+        Mouse = function()
+            -- Either counter: a click that reached the stand-in without its secure action running hides the window too
+            if standIn.Clicks > click.ClicksBefore or standIn.PostClicks > click.PostClicksBefore then return true end
+            if click.UpAt and GetTime() - click.UpAt >= hoverHold then
+                click.Missed = true
+                return true
+            end
+            return false
+        end,
+        Check = function()
+            WatchClicks(nil)
+            local frame = Window()
+            local clicks = standIn.Clicks - click.ClicksBefore
+            local reached = standIn.PostClicks - click.PostClicksBefore
+            local hidden = not frame:IsShown()
+            local by = click.Asked and "the kit's marker, ClickAt" or "the player's"
+            if clicks == 0 and reached > 0 then
+                Add("FAIL", ("a click on Show me's spot (%s) reached the stand-in (%d time(s)) but its secure action clicked nothing; the window %s"):format(
+                    by, reached, hidden and "hid" or "stayed open"))
+            elseif clicks == 0 and click.Missed then
+                Add("FAIL", ("a left click on Show me's spot (%s) ran no secure action: the mouse was on %s, and the window %s"):format(by,
+                    tostring(click.UpOn), hidden and "hid" or "stayed open"))
+            else
+                Add(clicks == 1 and hidden and "PASS" or "FAIL", ("a click on Show me's spot (%s): the stand-in's secure action clicked its counting button %d time(s) (1 expected), and its close %s"):format(
+                    by, clicks, hidden and "hid the window" or "did not hide the window"))
+            end
+            if hidden then fixtures.Tab:Open(secureSection) end
+        end
+    }
+end
+
 local function BuildSteps()
     local list = {
         {
@@ -2018,6 +2916,13 @@ local function BuildSteps()
     tinsert(list, SelectStaleStep(selectId))
     tinsert(list, DropdownStep(selectId, confirmSelectId))
     tinsert(list, KeysStep(keyId))
+    tinsert(list, ShowMeStep())
+    tinsert(list, ShowMeSecureStep())
+    tinsert(list, CombatStep())
+    tinsert(list, DefaultsStep())
+    tinsert(list, ExecuteStep())
+    tinsert(list, AllNoneStep())
+    tinsert(list, TabArrowsStep())
     tinsert(list, ResizeStep())
     -- Over a check box's slider the help pane explains the slider, not the check box (Krowi, 2026-11-02: KAF's Force two
     -- columns threshold, the fixture's too); the mouse's arrival on the bar is played through the row's own handler
@@ -2049,6 +2954,7 @@ local function BuildSteps()
     -- The steps that need the mouse, toggle-reset-clipped last: it leaves the cursor off the list for pane and close
     for _, step in ipairs(LinkHighlightSteps()) do tinsert(list, step) end
     for _, step in ipairs(GreyedHoverSteps()) do tinsert(list, step) end
+    for _, step in ipairs({ SecureMouseSteps() }) do tinsert(list, step) end
     tinsert(list, ClippedResetStep())
     tinsert(list, {
         Name = "pane",
@@ -2139,9 +3045,29 @@ local function Restore()
             tinsert(notBack, option.Id)
         end
     end
+    -- The fixture's tab order and Show me answers and the stand-in's answer as before the run; the click watcher stops
+    local answers = live.AnswersBefore
+    fixtures.ShowMeAnswer, fixtures.CanShowMeAnswer = answers.ShowMe, answers.CanShowMe
+    fixtures.SetTabOrder(live.TabOrderBefore)
+    WatchClicks(nil)
+    if standIn then
+        standIn.AnswerFalse = answers.AnswerFalse
+        wipe(standIn.Calls)
+    end
     local shared = live.SharedBefore
     local before = shared.Shared or live.SavedWindow.Window or {} -- the block the window showed before the run
     if frame then
+        -- The end of the combat signal the combat step gave for its screenshot, also when the run stopped before it ended it
+        if live.CombatSignalled then
+            live.CombatSignalled = nil
+            frame:OnEvent("PLAYER_REGEN_ENABLED")
+        end
+        -- The place show-me-secure moved the window from, also when the step stopped before it put it back
+        local point = live.PointBefore
+        if point and not point.Done then
+            PutPointsBack(frame, point.Points)
+            point.Done = true
+        end
         if frame.PaneCollapsed ~= (before.PaneCollapsed and true or false) then
             frame:SetPaneCollapsed(before.PaneCollapsed and true or false)
         end
@@ -2167,6 +3093,16 @@ local function Restore()
         if was and tContains(Internal().Tabs, was.Tab) then
             frame:ShowTab(was.Tab, was.Section)
         end
+        -- A window left shown draws the tab order as put back, and lays the stand-in over Show me or lets it go as its
+        -- section's help asks; a hidden one let it go as it hid
+        if frame:IsShown() then
+            if frame.SectionId == tabsSection and not frame.Searching then frame:ReloadSection() end
+            frame:UpdateShowMe()
+        elseif standIn then
+            standIn.Release()
+        end
+    elseif standIn then
+        standIn.Release()
     end
     local saved = fixtures.Tab:GetSaved() -- the window keeps this table, so its fields go back in place
     wipe(saved)
@@ -2230,6 +3166,11 @@ end
 
 local function Stop(reason, combatStarted)
     runToken = runToken + 1
+    -- A stopped run never reaches its mouse step's Clear: a click asked of the kit's marker must not stay for it to serve
+    -- later (it retries a refused one), maybe with the window gone
+    if KrowiGameInput then
+        KrowiGameInput.Clear()
+    end
     banner:Hide()
     if reason then
         tinsert(live.Observations, "stopped: " .. reason)
@@ -2418,6 +3359,10 @@ function steps.Start(done, what, observations)
     -- Both before the scenarios, which write the shared block and this addon's saved table too (window-second-tab)
     local sharedBefore = SnapshotShared()
     local savedWindow = DeepCopy(fixtures.Tab:GetSaved())
+    -- What the new steps change outside the options' values, which Restore puts back; before the scenarios too
+    local tabOrderBefore = fixtures.GetTabOrder()
+    local answersBefore = { ShowMe = fixtures.ShowMeAnswer, CanShowMe = fixtures.CanShowMeAnswer,
+        AnswerFalse = standIn and standIn.AnswerFalse or false }
     live = {
         SharedBefore = sharedBefore,
         Results = tests.RunScenarios(),
@@ -2426,7 +3371,9 @@ function steps.Start(done, what, observations)
         Before = {},
         SavedWindow = savedWindow,
         WasShown = frame and frame:IsShown() and { Tab = frame.Tab, Section = frame.SectionId } or nil,
-        AllSteps = #all
+        AllSteps = #all,
+        TabOrderBefore = tabOrderBefore,
+        AnswersBefore = answersBefore,
     }
     if not banner then
         CreateBanner()

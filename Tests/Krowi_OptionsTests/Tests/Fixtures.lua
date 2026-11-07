@@ -13,7 +13,12 @@
 -- /reload and Reset puts them back there. The window's own state goes into the table config.Saved gives (the library's
 -- Window and LastSection keys).
 -- Loaded in game (Tests/Files.xml) and by Headless.lua in the headless harness, so nothing here touches a frame or a
--- game API at load or in what the scenarios call (GetElements, the options' getters, the search's names).
+-- game API at load or in what the scenarios call (GetElements, the options' getters, the search's names). The one help
+-- that lays a secure button over Show me (Tooltips' ShowMeSecure) hands that to the test addon's stand-in
+-- (ShowMeStandIn.lua), which only the game loads; headless it lays nothing over.
+-- For the live steps (Steps.lua) the fixture also answers what they set and counts what they ask: Window's Show me
+-- (ShowMeAnswer, CanShowMeAnswer, ShowMeRuns), ResetSection's calls per section (ResetCalls) and the tab list's order
+-- (GetTabOrder, SetTabOrder); Reset puts each back.
 -- Words the scenarios search for (Scenarios.lua), by name unless said: "lantern" stands in three descriptions and a help
 -- text and in no name, "loaded" only in the Other addons section's three names, "Reset position" only on the Position
 -- heading's three buttons, "reverse" only in the Points tooltip names, "tooltip" in names on both tabs, "places" only in
@@ -336,6 +341,15 @@ local function TabItems()
     return items
 end
 
+-- The tab list's order, as a copy (tab-arrows and Restore, Steps.lua), and set from one
+function fixtures.GetTabOrder()
+    return { unpack(tabOrder) }
+end
+
+function fixtures.SetTabOrder(order)
+    tabOrder = { unpack(order) }
+end
+
 local builders = {}
 
 function builders.overview()
@@ -461,8 +475,10 @@ local function ChangedCount(id)
 end
 fixtures.ChangedCount = ChangedCount
 
--- Returns whether an option it set back needs a reload
+-- Returns whether an option it set back needs a reload. Counts its calls per section (ResetCalls), which the defaults
+-- step reads.
 local function ResetSection(id)
+    fixtures.ResetCalls[id] = (fixtures.ResetCalls[id] or 0) + 1
     local reload = false
     for _, o in ipairs(SectionOptions(id)) do
         if o:IsChanged() then
@@ -480,6 +496,10 @@ local function Picture(name)
     return { Picture = picture.Picture, Width = picture.Width, Height = picture.Height, TexCoords = picture.TexCoords }
 end
 
+-- Window's Show me answers what the show-me step sets and counts its runs (Steps.lua); by default it answers as it did
+-- before that step existed (ShowMe false, CanShowMe true). Tooltips' lays a secure button over Show me, as
+-- Krowi_AchievementFilter's map help does: in game the test addon's stand-in (ShowMeStandIn.lua), headless none, where
+-- it lets go and answers that it cannot lie over Show me.
 local helps = {
     overview = { Title = "Options Test", Blocks = {
         { Text = "A tab with every element kind and option type of Krowi_Options, for its tests." },
@@ -491,8 +511,17 @@ local helps = {
         { Text = "Where the windows stand and how the list looks. The lantern art comes with the old look." },
         { Heading = "Position" },
         { Term = "Reset position", Text = "puts a window back where it starts." },
-    }, ShowMe = function() return false end, CanShowMe = function() return true end },
-    tooltips = { Title = "Tooltips", Blocks = { Picture("Tall"), { Text = "What a unit's tooltip shows." } } },
+    }, ShowMe = function()
+        fixtures.ShowMeRuns = (fixtures.ShowMeRuns or 0) + 1
+        return fixtures.ShowMeAnswer
+    end, CanShowMe = function() return fixtures.CanShowMeAnswer end },
+    tooltips = { Title = "Tooltips", Blocks = { Picture("Tall"), { Text = "What a unit's tooltip shows." } },
+        ShowMeSecure = function(button, close)
+            local standIn = addon.Tests.ShowMeStandIn
+            if not standIn then return button == nil end
+            return standIn.ShowMeSecure(button, close)
+        end,
+        ShowMeNote = "No button can lie over Show me here, so this note shows in its place." },
 }
 
 -- About has no help: its pane shows its title alone
@@ -511,11 +540,14 @@ local function Landing()
     return sectionNames[last] and last or "overview"
 end
 
--- Every option back at its default, the tab list in its first order, nothing seen yet
+-- Every option back at its default, the tab list in its first order, Show me's answers at their defaults, nothing seen
+-- or counted yet
 function fixtures.Reset()
     for id in next, values do values[id] = defaults[id] end
     for _, o in next, byId do o.Runs = nil end
     tabOrder = { unpack(defaultTabOrder) }
+    fixtures.ShowMeAnswer, fixtures.CanShowMeAnswer, fixtures.ShowMeRuns = false, true, 0
+    fixtures.ResetCalls = {}
     fixtures.LastShown, fixtures.Created, fixtures.Frame = nil, nil, nil
     fixtures.Tab, fixtures.SecondTab = nil, nil
 end
