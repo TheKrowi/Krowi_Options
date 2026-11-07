@@ -30,6 +30,15 @@
 --   undo-reload: the undo arrow of a check box whose slider needs a reload lights the reload bar (Bugs B1)
 --   input-focus-lost: a text box saves its typed text as it loses the focus, and Escape reverts it (Bugs B13)
 --   select-stale: a dropdown whose saved value is no longer a choice shows its default, which is saved (Bugs B12)
+--   dropdown: a dropdown's arrows through their own OnClick (Blizzard's DropdownWithSteppersMixin, the same on every
+--     client): the right arrow saves the next choice and the dropdown shows it, the left arrow goes back and greys on the
+--     first choice, the changed line and the footer follow; on a dropdown with a Confirm the arrow asks first, No keeps
+--     the value and Yes sets it
+--   keys: the key row's own capture: StartKeyCapture lights the button with Press a key, a key handed to the row's
+--     handler (never the game's key events, so the game binds nothing) is saved and shown, Escape clears the slot;
+--     skipped in combat
+--   resize: the window's resize bounds (its width fixed, its height from MinHeight to the screen's), and a saved size
+--     outside them, applied through the window's Init, comes back inside them and writes nothing to the saved state
 --   slider-help: over a check box's slider the help explains the slider
 --   greyed-help, greyed-help-collapsed: a greyed-out check box, dropdown, dropdown arrow and tab arrow still fire their
 --     hover and explain their option, in the pane and in the collapsed pane's tooltip
@@ -47,8 +56,9 @@
 -- /kotest <what> runs only some steps (SelectSteps, at the end of the file): a set (smoke, behaviour), a step's name, the
 -- start of names (toggle, search, section), or a step's number in the banner, each with the steps it builds on and the
 -- open first.
--- At the end every value the steps changed, the window's saved state (place, pane, search breadth, last section) and its
--- reload bar are put back, and the Lua errors of the session that name Krowi_Options are reported from BugGrabber.
+-- At the end every value the steps changed, the window's saved state (place, pane, search breadth, last section), its
+-- reload bar and the height resize changed are put back, and the Lua errors of the session that name Krowi_Options are
+-- reported from BugGrabber.
 -- Combat stops the run; the values go back once it ends. The run never sets a CVar.
 
 local _, addon = ...
@@ -64,7 +74,7 @@ local mouseWait, pollEvery = 30, 0.1 -- a step that needs the player's mouse wai
 local toggleId = "window.centerTitle"
 local rangeId = "window.indentation"
 local inputId = "window.dateFormat"
-local selectId = "tooltips.sort1" -- a dropdown with a default, and neither a Placeholder nor a Confirm (select-stale)
+local selectId = "tooltips.sort1" -- a dropdown with a default, and neither a Placeholder nor a Confirm (select-stale, dropdown)
 local errorPattern = "Krowi_Options" -- the library's folder, and this addon's (Krowi_OptionsTests)
 
 local live -- the run in progress
@@ -1567,6 +1577,336 @@ local function PublicStep()
     }
 end
 
+-- [[ The code each client runs its own copy of: a dropdown's arrows, a key captured, the window's size ]] --
+-- No other step reaches these (the client review of 2026-11-07, CLAUDE.md's Clients). Each step works through the
+-- window's own functions and its rows' own handlers, needs no mouse and runs unattended.
+
+-- A dropdown's arrows: build.Select (RowFrames.lua) mixes Blizzard's DropdownWithSteppersMixin into the row's Select, whose
+-- OnLoad gives each arrow its OnClick: OnIncrementClicked, the dropdown's Increment, then Pick of the next radio, which
+-- runs that radio's responder (RowMixins.lua's select type). The same code on every client (SharedUIPanelTemplates.lua
+-- and Blizzard_Menu's DropdownButton.lua on live, classic, classic_era, classic_anniversary, classic_titan and forever).
+-- The step clicks an arrow through Click(), as the player's click runs it, and never one that is greyed. Each dropdown is
+-- set to its first choice first, through the option and the window's OnOptionChanged as a change made elsewhere, so its
+-- right arrow can step. The plain one (Sort priority 1): the right arrow saves the next choice and the dropdown shows it,
+-- the left arrow goes back and greys on the first choice, the changed line and the footer following each. The one with a
+-- Confirm (Profile): the arrow asks in the window's header and leaves the value, No keeps it, the arrow again and Yes set
+-- it. Restore puts both values back.
+local confirmSelectId = "debug.profile"
+
+-- What a dropdown's row shows: its option's value, the dropdown's text, its changed line and the footer, its arrows, and
+-- the question the window asks (its Confirming, and the header with No beside it)
+local function ReadSelect(option, sectionId)
+    local frame = Window()
+    local row = RowOf(option)
+    local footer, count = FooterAgrees(sectionId)
+    return {
+        Value = option:Get(),
+        Text = row and SelectText(row),
+        Line = row ~= nil and row.ChangedBar:IsShown() == option:IsChanged(),
+        Footer = footer,
+        Count = count,
+        Back = row ~= nil and row.Select.DecrementButton:IsEnabled() and true or false,
+        Forward = row ~= nil and row.Select.IncrementButton:IsEnabled() and true or false,
+        Question = frame.Confirming and frame.Confirming.Text,
+        Header = frame.CancelButton:IsShown() and frame.ChangedText:GetText() or nil,
+    }
+end
+
+-- Clicks a dropdown's arrow ("IncrementButton" or "DecrementButton") as the player does: nil once clicked, else why not
+local function ClickArrow(option, key)
+    local row = RowOf(option)
+    if not row then return "its row is not drawn" end
+    local arrow = row.Select[key]
+    if not arrow:IsEnabled() then return "greyed, so not clicked" end
+    arrow:Click()
+end
+
+-- A dropdown set to its first choice through the option and the window, as a change made elsewhere, once Restore knows
+-- its value; returns its first and second choice
+local function ToFirstChoice(option)
+    local values = option:GetValues()
+    Remember(option)
+    if option:Get() ~= values[1][1] then
+        option:Set(values[1][1])
+        Window():OnOptionChanged(option)
+    end
+    return values[1][1], values[2][1]
+end
+
+local function Follows(read)
+    return ("changed line %s, footer %s (%d changed)"):format(read.Line and "follows" or "wrong", read.Footer and "follows" or "wrong", read.Count)
+end
+
+local function Quoted(text)
+    return text and ("'" .. tostring(text) .. "'") or "nothing"
+end
+
+local function DropdownStep(optionId, confirmId)
+    local seen
+    return {
+        Name = "dropdown",
+        Text = "a dropdown's arrows step through its choices, and ask first where the option asks",
+        Run = function()
+            local frame = Window()
+            local sectionId, option = FindOption(optionId)
+            local confirmSection, confirmOption = FindOption(confirmId)
+            if not option or not confirmOption then return ("%s or %s is in no section"):format(optionId, confirmId) end
+            if #option:GetValues() < 2 or #confirmOption:GetValues() < 2 or not confirmOption.Confirm then
+                return ("%s and %s need two choices each, and %s a Confirm"):format(optionId, confirmId, confirmId)
+            end
+            seen = { Id = optionId, ConfirmId = confirmId }
+            -- 1 and 2: the plain dropdown
+            frame:ShowSection(sectionId, optionId)
+            if not RowOf(option) then return "its row is not drawn" end
+            seen.First, seen.Next = ToFirstChoice(option)
+            seen.FirstText, seen.NextText = option:FormatValue(seen.First), option:FormatValue(seen.Next)
+            seen.ForwardWhy = ClickArrow(option, "IncrementButton")
+            seen.Forward = ReadSelect(option, sectionId)
+            seen.BackWhy = ClickArrow(option, "DecrementButton")
+            seen.Back = ReadSelect(option, sectionId)
+            -- 3 to 5: the dropdown that asks
+            frame:ShowSection(confirmSection, confirmId)
+            if not RowOf(confirmOption) then
+                seen.ConfirmMissing = true
+                return
+            end
+            seen.ConfirmFirst, seen.ConfirmNext = ToFirstChoice(confirmOption)
+            seen.ConfirmFirstText, seen.ConfirmNextText = confirmOption:FormatValue(seen.ConfirmFirst), confirmOption:FormatValue(seen.ConfirmNext)
+            seen.Question = confirmOption:Confirm(seen.ConfirmNext)
+            seen.AskWhy = ClickArrow(confirmOption, "IncrementButton")
+            seen.Asked = ReadSelect(confirmOption, confirmSection)
+            -- No and Yes answer only the arrow's question: with none asked, Defaults would ask to set the section back
+            seen.NoClicked = seen.Asked.Question == seen.Question
+            if seen.NoClicked then frame.CancelButton:Click() end
+            seen.No = ReadSelect(confirmOption, confirmSection)
+            seen.AgainWhy = ClickArrow(confirmOption, "IncrementButton")
+            seen.Again = ReadSelect(confirmOption, confirmSection)
+            seen.YesClicked = seen.Again.Question == seen.Question
+            if seen.YesClicked then frame.DefaultsButton:Click() end
+            seen.Yes = ReadSelect(confirmOption, confirmSection)
+        end,
+        Check = function()
+            local forward, back = seen.Forward, seen.Back
+            local forwardOk = not seen.ForwardWhy and forward.Value == seen.Next and forward.Text == seen.NextText and forward.Line and forward.Footer
+            Add(forwardOk and "PASS" or "FAIL", ("1 right arrow on %s (%s): from '%s' the option holds %s (the next choice is %s), the dropdown shows %s, %s"):format(
+                seen.Id, seen.ForwardWhy or "clicked", tostring(seen.FirstText), tostring(forward.Value), tostring(seen.Next), Quoted(forward.Text),
+                Follows(forward)))
+            local backOk = not seen.BackWhy and back.Value == seen.First and back.Text == seen.FirstText and back.Line and back.Footer
+                and not back.Back and back.Forward
+            Add(backOk and "PASS" or "FAIL", ("2 left arrow on %s (%s): the option holds %s (the first choice is %s), the dropdown shows %s, %s; on the first choice the left arrow is %s and the right %s"):format(
+                seen.Id, seen.BackWhy or "clicked", tostring(back.Value), tostring(seen.First), Quoted(back.Text), Follows(back),
+                back.Back and "enabled (greyed expected)" or "greyed", back.Forward and "enabled" or "greyed (enabled expected)"))
+            if seen.ConfirmMissing then
+                Add("FAIL", ("3 to 5 on %s: its row is not drawn"):format(seen.ConfirmId))
+                return
+            end
+            local asked, no, again, yes = seen.Asked, seen.No, seen.Again, seen.Yes
+            local askOk = not seen.AskWhy and asked.Question == seen.Question and asked.Header == seen.Question
+                and asked.Value == seen.ConfirmFirst and asked.Text == seen.ConfirmFirstText
+            Add(askOk and "PASS" or "FAIL", ("3 right arrow on %s, which asks (%s): the window asks %s ('%s' expected), its header shows %s; the option still holds %s (%s expected), the dropdown shows %s"):format(
+                seen.ConfirmId, seen.AskWhy or "clicked", Quoted(asked.Question), tostring(seen.Question), Quoted(asked.Header), tostring(asked.Value),
+                tostring(seen.ConfirmFirst), Quoted(asked.Text)))
+            local noOk = seen.NoClicked and not no.Question and not no.Header and no.Value == seen.ConfirmFirst and no.Text == seen.ConfirmFirstText
+            Add(noOk and "PASS" or "FAIL", ("4 No on %s (%s): the question %s, the option holds %s (%s expected), the dropdown shows %s"):format(
+                seen.ConfirmId, seen.NoClicked and "clicked" or "not clicked: nothing was asked", (no.Question or no.Header) and "stays" or "is gone",
+                tostring(no.Value), tostring(seen.ConfirmFirst), Quoted(no.Text)))
+            local yesOk = not seen.AgainWhy and seen.YesClicked and not yes.Question and not yes.Header and yes.Value == seen.ConfirmNext
+                and yes.Text == seen.ConfirmNextText and yes.Line and yes.Footer
+            Add(yesOk and "PASS" or "FAIL", ("5 the right arrow again on %s (%s, the window asks %s), then Yes (%s): the question %s, the option holds %s (%s expected), the dropdown shows %s, %s"):format(
+                seen.ConfirmId, seen.AgainWhy or "clicked", Quoted(again.Question), seen.YesClicked and "clicked" or "not clicked: nothing was asked",
+                (yes.Question or yes.Header) and "stays" or "is gone", tostring(yes.Value), tostring(seen.ConfirmNext), Quoted(yes.Text), Follows(yes)))
+        end
+    }
+end
+
+-- A key captured by the key row (RowMixins.lua, OptionRowMixin): the row's own StartKeyCapture lights the slot's button
+-- with Press a key and hands it the keyboard; the key then goes to the row's own handler, OnKeyCaptured, never through
+-- the game's key events, so the game binds nothing and the fixture's slot keeps it in its own table (Fixtures.lua). The
+-- handler adds the modifiers held at that moment, which are the game's, so the saved key has only to end in F. Escape
+-- clears the slot. Out of combat only, as the handler: in combat the step skips. A capture left open ends through the
+-- window's own EndKeyCaptures, so no button keeps the keyboard; Restore puts the slot back.
+local keyId = "keys.open"
+local capturedKey = "F"
+
+local function KeysStep(optionId)
+    local seen
+    -- What the row shows of its first slot
+    local function Read(option, sectionId)
+        local row = RowOf(option)
+        local button = row and row.Key1
+        local footer, count = FooterAgrees(sectionId)
+        return {
+            Capturing = row and row.Capturing,
+            Text = button and button:GetText(),
+            Lit = button ~= nil and button.SelectedHighlight:IsShown() and true or false,
+            Keyboard = button ~= nil and button:IsKeyboardEnabled() and true or false,
+            Value = option.Slots[1]:Get(),
+            Line = row ~= nil and row.ChangedBar:IsShown() == option:IsChanged(),
+            Footer = footer,
+            Count = count,
+        }
+    end
+    -- One of the row's own key methods, on the row the page draws now
+    local function OnRow(option, method, ...)
+        local row = RowOf(option)
+        if row then row[method](row, ...) end
+    end
+    local function Ended(read)
+        return read.Capturing == nil and not read.Keyboard
+    end
+    return {
+        Name = "keys",
+        Text = "a key row takes a key through its own capture, and Escape clears it",
+        Run = function()
+            if InCombatLockdown() then return "in combat: a key row captures a key out of combat only" end
+            local frame = Window()
+            local sectionId, option = FindOption(optionId)
+            if not option or not option.Slots then return optionId .. " is no key option in any section" end
+            frame:ShowSection(sectionId, optionId)
+            if not RowOf(option) then return "its row is not drawn" end
+            local strings = frame.Strings
+            Remember(option.Slots[1])
+            seen = { Id = optionId, PressAKey = strings.PressAKey, NotBound = GRAY_FONT_COLOR:WrapTextInColorCode(strings.NotBound) }
+            OnRow(option, "StartKeyCapture", 1)
+            seen.Start = Read(option, sectionId)
+            OnRow(option, "OnKeyCaptured", 1, capturedKey)
+            seen.Bound = Read(option, sectionId)
+            OnRow(option, "StartKeyCapture", 1)
+            seen.Again = Read(option, sectionId)
+            OnRow(option, "OnKeyCaptured", 1, "ESCAPE")
+            seen.Cleared = Read(option, sectionId)
+            frame:EndKeyCaptures()
+        end,
+        Check = function()
+            local start, bound, again, cleared = seen.Start, seen.Bound, seen.Again, seen.Cleared
+            local startOk = start.Capturing == 1 and start.Text == seen.PressAKey and start.Lit and start.Keyboard
+            Add(startOk and "PASS" or "FAIL", ("1 capture on %s's first slot: Capturing %s (1 expected), the button shows %s ('%s' expected), lit %s, takes the keyboard %s"):format(
+                seen.Id, tostring(start.Capturing), Quoted(start.Text), seen.PressAKey, start.Lit and "yes" or "no", start.Keyboard and "yes" or "no"))
+            local value = bound.Value
+            local endsInKey = type(value) == "string" and (value == capturedKey or value:sub(-#capturedKey - 1) == "-" .. capturedKey)
+            local boundText = endsInKey and GetBindingText(value) or nil
+            local boundOk = endsInKey and bound.Text == boundText and Ended(bound) and bound.Line and bound.Footer
+            Add(boundOk and "PASS" or "FAIL", ("2 %s handed to the row's handler: the slot holds %s (ending in %s expected), the button shows %s%s, the capture %s, %s"):format(
+                capturedKey, Quoted(value), capturedKey, Quoted(bound.Text), boundText and bound.Text ~= boundText and (" ('" .. boundText .. "' expected)") or "",
+                Ended(bound) and "ended" or "still open", Follows(bound)))
+            local clearedOk = again.Capturing == 1 and cleared.Value == "" and cleared.Text == seen.NotBound and Ended(cleared) and cleared.Line and cleared.Footer
+            Add(clearedOk and "PASS" or "FAIL", ("3 capture again (Capturing %s), then Escape: the slot holds %s ('' expected), the button %s, the capture %s, %s"):format(
+                tostring(again.Capturing), Quoted(cleared.Value), cleared.Text == seen.NotBound and "shows Not bound in grey" or ("shows " .. Quoted(cleared.Text) .. ", not Not bound in grey"),
+                Ended(cleared) and "ended" or "still open", Follows(cleared)))
+        end
+    }
+end
+
+-- The window's size (WindowLayout.lua): as wide as the game's window plus the help pane, resizable in height only, from
+-- lib.Internal.Geometry.MinHeight to the screen's height, the bounds ApplyWidth sets through SetResizeBounds and the game
+-- holds a drag to. A saved size comes in through the window's Init, which takes the window's shared block
+-- (lib.Internal.GetFrame) and is the only function of the window that takes a size: it keeps the height at least
+-- MinHeight, ignores the width, and has ApplyWidth bring the window back onto the screen. The step reads the bounds, gives
+-- Init a block with a size below them and one above them (the window's other fields as they are, and no place), and
+-- checks the window inside the bounds each time, and that applying a size wrote nothing to the saved state. The large one
+-- stays for the screenshot; then the height and place go back (Restore too, should the run stop first). No drag, no mouse.
+local smallSize, largeSize = { 400, 100 }, { 5000, 5000 }
+
+-- A value as text whatever its keys' order, to tell whether a saved block changed
+local function Flat(value)
+    if type(value) ~= "table" then return tostring(value) end
+    local parts = {}
+    for key, inner in next, value do parts[#parts + 1] = tostring(key) .. "=" .. Flat(inner) end
+    table.sort(parts)
+    return "{" .. table.concat(parts, ",") .. "}"
+end
+
+-- The window's saved state: the library's own copy and the fixture's block (internals, read knowingly)
+local function SavedState()
+    return Flat(Internal().Shared) .. Flat(fixtures.Tab:GetSaved().Window)
+end
+
+-- The window's height and anchors, as resize finds them
+local function SizeOf(frame)
+    local points = {}
+    for i = 1, frame:GetNumPoints() do points[i] = { frame:GetPoint(i) } end
+    return { Height = frame:GetHeight(), Points = points }
+end
+
+-- Puts back what SizeOf read, through the window's own layout: ApplyWidth without keepLeft saves nothing
+local function PutSizeBack(frame, before)
+    frame:SetHeight(before.Height)
+    frame:ClearAllPoints()
+    for _, point in ipairs(before.Points) do frame:SetPoint(point[1], point[2], point[3], point[4], point[5]) end
+    frame:ApplyWidth()
+    frame:Layout()
+    frame:ReloadSection()
+    before.Done = true
+end
+
+-- The bounds a drag is held to, as the game reports them ({ minWidth, minHeight, maxWidth, maxHeight }), or nil on a
+-- client without GetResizeBounds
+local function ResizeBounds(frame)
+    if not frame.GetResizeBounds then return nil end
+    local minWidth, minHeight, maxWidth, maxHeight = frame:GetResizeBounds()
+    return { minWidth, minHeight, maxWidth, maxHeight }
+end
+
+local function ResizeStep()
+    local seen
+    -- A saved block with this size, the window's other fields as they are and no place, through the window's Init
+    local function Apply(frame, size)
+        frame:Init({ Size = { size[1], size[2] }, PaneCollapsed = frame.PaneCollapsed, SearchAll = frame.SearchEveryTab,
+            SearchBroad = frame.BroadSearch })
+        return { Width = frame:GetWidth(), Height = frame:GetHeight() }
+    end
+    local function Inside(size, bounds)
+        return size.Width >= bounds[1] - 0.5 and size.Width <= bounds[3] + 0.5 and size.Height >= bounds[2] - 0.5 and size.Height <= bounds[4] + 0.5
+    end
+    local function Near(a, b)
+        return math.abs(a - b) < 0.5
+    end
+    local function Range(bounds)
+        return ("%gx%g to %gx%g"):format(bounds[1], bounds[2], bounds[3], bounds[4])
+    end
+    return {
+        Name = "resize",
+        Text = "the window's resize bounds, and a saved size outside them brought inside",
+        Run = function()
+            local frame = Window()
+            seen = { Saved = SavedState() }
+            live.SizeBefore = live.SizeBefore or SizeOf(frame)
+            seen.Bounds = ResizeBounds(frame)
+            seen.Small = Apply(frame, smallSize)
+            Apply(frame, largeSize)
+        end,
+        Check = function()
+            local frame = Window()
+            local internal = Internal()
+            local width = internal.WindowWidth(frame.PaneCollapsed)
+            local minHeight = internal.Geometry.MinHeight
+            local expected = { width, minHeight, width, math.max(minHeight, UIParent:GetHeight() / frame:GetScale()) }
+            local bounds = seen.Bounds
+            if not bounds then
+                Add("SKIP", ("1 bounds: this client has no GetResizeBounds, so the bounds the layout sets cannot be read; 2 and 3 hold the window to the expected %s"):format(
+                    Range(expected)))
+            else
+                local ok = Near(bounds[1], expected[1]) and Near(bounds[2], expected[2]) and Near(bounds[3], expected[3]) and Near(bounds[4], expected[4])
+                Add(ok and "PASS" or "FAIL", ("1 bounds: %s (%s expected: the width fixed, the height from MinHeight to the screen's)"):format(
+                    Range(bounds), Range(expected)))
+            end
+            -- Inside the bounds the game reports and the ones the layout means
+            local function Report(number, size, measured)
+                local ok = Inside(measured, expected) and (not bounds or Inside(measured, bounds))
+                Add(ok and "PASS" or "FAIL", ("%d a saved size of %dx%d: the window %gx%g, %s the bounds %s"):format(number, size[1], size[2],
+                    measured.Width, measured.Height, ok and "inside" or "outside", Range(bounds or expected)))
+            end
+            Report(2, smallSize, seen.Small)
+            Report(3, largeSize, { Width = frame:GetWidth(), Height = frame:GetHeight() })
+            local untouched = SavedState() == seen.Saved
+            Add(untouched and "PASS" or "FAIL", ("4 saved state: applying the two sizes %s the window's saved state"):format(untouched and "left" or "changed"))
+            After(afterShot / 2, function()
+                PutSizeBack(Window(), live.SizeBefore)
+            end)
+        end
+    }
+end
+
 local function BuildSteps()
     local list = {
         {
@@ -1676,6 +2016,9 @@ local function BuildSteps()
     end) }) do tinsert(list, step) end
     tinsert(list, InputFocusLostStep(inputId))
     tinsert(list, SelectStaleStep(selectId))
+    tinsert(list, DropdownStep(selectId, confirmSelectId))
+    tinsert(list, KeysStep(keyId))
+    tinsert(list, ResizeStep())
     -- Over a check box's slider the help pane explains the slider, not the check box (Krowi, 2026-11-02: KAF's Force two
     -- columns threshold, the fixture's too); the mouse's arrival on the bar is played through the row's own handler
     local pairSection, pairOption
@@ -1811,6 +2154,14 @@ local function Restore()
         if live.ReloadBefore then
             frame.ReloadPending = live.ReloadBefore.Value
             frame:RefreshFooter()
+        end
+        -- The height and place resize changed, also when the run stopped before that step put them back
+        local size = live.SizeBefore
+        if size then
+            local putBack = size.Done or pcall(PutSizeBack, frame, size)
+            if not putBack or math.abs(frame:GetHeight() - size.Height) > 0.5 then
+                tinsert(notBack, "window height")
+            end
         end
         local was = live.WasShown
         if was and tContains(Internal().Tabs, was.Tab) then
