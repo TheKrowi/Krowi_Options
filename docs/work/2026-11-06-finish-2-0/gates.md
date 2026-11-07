@@ -19,3 +19,4 @@ Class: harness
 | 2026-11-06 | plan | Phase 2: the plan (step 0 the safety net and -Consumers, then the split in steps 1 to 11, three Opus hand-offs verified by me, look gate at the end) | approve | approved in plan mode | took |
 | 2026-11-07 | look | Phase 2: does the options window look right (five screenshots, Retail and Mists, on a page: the builders' row heights are gone, nothing should differ) | looks right | first "point me to the screenshots", then "five screenshots are attached as file cards? i don;t see anything" (the cards did not reach Krowi; sent as a page instead); then "Looks right (Recommended)" | took |
 | 2026-11-07 | design | KAF reads optionsLib.L["Requires a reload"] but L is not public: how the paired KAF pull request handles it | KAF reads GetStrings().NeedsReload | "KAF reads GetStrings().NeedsReload (Recommended)" | took |
+| 2026-11-07 | merge | Phase 2: Krowi_Options #6 and Krowi_AchievementFilter #400 | merge both | "Merge" | took |
