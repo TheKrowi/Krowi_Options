@@ -1,5 +1,5 @@
 # Intent: a button beside a dropdown
-Author: Krowi (maintainer). Source: Krowi_AchievementFilter's Pop Out split (KAF docs/work/2026-11-09-pop-out, spec requirement 8c), Krowi's pick "B1" of the mock page https://claude.ai/artifact/KwWbpdEMvN6giwEfsjW6Lq, 2026-11-09. Status: accepted
+Author: Krowi (maintainer). Source: Krowi_AchievementFilter's Pop Out split (KAF docs/work/2026-11-09-pop-out, spec requirement 8c), Krowi's pick "B1" of the mock page https://claude.ai/artifact/KwWbpdEMvN6giwEfsjW6Lq, 2026-11-09. Status: done
 
 ## Problem
 KAF shows one setting in two sections (the Pop Out modifier key in Keys and clicks and in Pop Out's own section, as the game's Settings list a binding in more than one place). Next to the dropdown, each row gets a small button that opens the other section. An option row draws a second control only after a check box today (`RowMixins.lua:491-492`, the contract's "With only on a toggle", `RowMixins.lua:10`), so a button beside a dropdown cannot be drawn: on a select row a `With` is ignored.

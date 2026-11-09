@@ -1,5 +1,5 @@
 # Spec: a button beside a dropdown
-Intent: [intent.md](intent.md). Status: accepted
+Intent: [intent.md](intent.md). Status: done
 
 ## Requirements
 1. An `Option` element whose option is a `select` may carry `With`, an `execute` option. The row draws it as a button 5 after the dropdown's right arrow, vertically centred on the row (the dropdown ends 61.5 before the row's right edge, `RowMixins.lua:69` and `RowFrames.lua:170`).

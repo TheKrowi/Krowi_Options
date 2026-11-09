@@ -1,5 +1,5 @@
 # Plan: a button beside a dropdown
-Spec: [spec.md](spec.md). Status: draft
+Spec: [spec.md](spec.md). Status: done
 
 ## Context
 KAF's Pop Out split (KAF docs/work/2026-11-09-pop-out, requirement 8c) shows the Pop Out modifier in two sections, each row with a button to the other. Krowi chose the button beside the dropdown: a narrow red button with », the same height as the row's other buttons. The library draws a second control only after a check box, so it grows first and releases as 2.1; KAF's PR merges after that release. Branch `feature/2026-11-09-select-with-button`, worktree `feature-2026-11-09-select-with-button`.
