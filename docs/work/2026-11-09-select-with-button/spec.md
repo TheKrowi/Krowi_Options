@@ -40,7 +40,7 @@ Intent: [intent.md](intent.md). Status: accepted
 - **Player-facing text.** The changelog for addon authors: a dropdown row can carry a button.
 
 ## Verification
-- Headless: a `Bugs.lua` scenario `B7` "a select option with an execute With" (`Recorded` "nothing drawn beside the dropdown", `Target` "an icon button after the dropdown that runs the With"), first recorded as today, then flipped by the change; `Structure` (the names on `OptionRow`'s mixin, `lib.Internal`'s keys unchanged, the two-copy mixes); `ContractAndErrors` (a `With` the older rule ignores); the full `run.lua` green.
+- Headless: a `Bugs.lua` scenario `B31` "a select option with an execute With" (`Recorded` "nothing drawn beside the dropdown", `Target` "an icon button after the dropdown that runs the With"), first recorded as today, then flipped by the change; `Structure` (the names on `OptionRow`'s mixin, `lib.Internal`'s keys unchanged, the two-copy mixes); `ContractAndErrors` (a `With` the older rule ignores); the full `run.lua` green.
 - The test addon: its fixture tab gets a dropdown with a button (`Fixtures.lua`), and a live step checks the button stands after the dropdown, runs its option, explains itself under the mouse and stays enabled while the dropdown is greyed; `/kotest all` on the five clients.
 - The two-copy gate (`Test-TwoCopies.ps1`) on the five clients.
 - Look gate: screenshots of the fixture's row on Retail and Mists, and of KAF's two rows through a KAF worktree pointing at this branch, on a published page.

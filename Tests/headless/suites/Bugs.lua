@@ -1096,3 +1096,35 @@ Scenario("B30", "a config with ResetSection or ChangedCount but not both", {
     Recorded = "without ResetSection: config.ResetSection is missing: it comes with ChangedCount; without ChangedCount: config.ChangedCount is missing: it comes with ResetSection; without both: accepted; with both: accepted",
     Target = "without ResetSection: config.ResetSection is missing: it comes with ChangedCount; without ChangedCount: config.ChangedCount is missing: it comes with ResetSection; without both: accepted; with both: accepted",
 })
+
+-- [[ B31: a button beside a dropdown (docs/work/2026-11-09-select-with-button) ]] --
+-- A select row with an execute With, its dropdown greyed out: what stands after the dropdown's right arrow, whether it is
+-- shown and enabled, and what a click on it runs. The row's frames are recorders, which make any field asked for, so
+-- the button is read with rawget.
+Scenario("B31", "a select option with an execute With: a button after the dropdown that runs the With", {
+    Observe = function()
+        local lib = LoadCopy()
+        local row = OptionRow(lib)
+        local set = {}
+        local modifier = Option("Modifier", { Type = "select", GetValues = function() return { { 1, "Shift" }, { 2, "Ctrl" } } end,
+            Get = function() return 2 end, IsDisabled = function() return true end, Set = function() set[#set + 1] = "Modifier" end })
+        local go = Option("Go to Pop Out", { Type = "execute", GetButtonText = function() return "Go to Pop Out" end,
+            Set = function() set[#set + 1] = "Go to Pop Out" end })
+        row:Init({ Kind = "Option", Option = modifier, With = go }, RowWindow(lib, { OnOptionChanged = Noop, Strings = {} }))
+        local button = rawget(row, "Go")
+        if not button then return "nothing beside the dropdown" end
+        local after = false
+        for _, args in ipairs(CallsTo(button, "SetPoint")) do
+            if args[1] == "LEFT" and args[2] == row.Select.IncrementButton and args[3] == "RIGHT" and args[4] == 5 then after = true end
+        end
+        local shown = #CallsTo(button, "Show") > 0
+        local enabled = CallsTo(button, "SetEnabled")
+        enabled = enabled[#enabled] and enabled[#enabled][1]
+        local click = ScriptOf(button, "OnClick")
+        if click then click() end
+        return ("a button %s the dropdown, %s, %s, a click runs %s"):format(after and "after" or "not after",
+            shown and "shown" or "hidden", enabled and "enabled" or "greyed", #set > 0 and table.concat(set, ", ") or "nothing")
+    end,
+    Recorded = "nothing beside the dropdown",
+    Target = "a button after the dropdown, shown, enabled, a click runs Go to Pop Out",
+})
