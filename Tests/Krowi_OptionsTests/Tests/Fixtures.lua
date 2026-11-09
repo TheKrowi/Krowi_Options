@@ -222,7 +222,7 @@ local priorityOrder = New{ Id = "debug.priorityOrder", Type = "select", Label = 
     Values = { { "first", "First tab first" }, { "last", "Last tab first" } }, DisabledIf = function() return not tabPriority:Get() end,
     Description = "Which end of the list wins." }
 -- The dropdown's button (a select's With, 2.1): it opens Key bindings and stays enabled while the dropdown is greyed
-local goKeys = New{ Id = "debug.goKeys", Type = "execute", Label = "Go to Key bindings", ButtonText = "Go to Key bindings",
+local goKeys = New{ Id = "debug.goKeys", Type = "execute", Label = "Go to Key bindings", ButtonText = "Open",
     Description = "Opens the Key bindings section.", OnRun = function() fixtures.Tab:Open("keys") end }
 local profile = New{ Id = "debug.profile", Type = "select", Label = "Profile", Default = "default", Placeholder = "Pick a profile",
     Values = { { "default", "Default" }, { "alternate", "Alternate" } }, Description = "The set of settings in use.",

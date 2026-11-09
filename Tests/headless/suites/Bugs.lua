@@ -1146,3 +1146,20 @@ Scenario("B31b", "a select option with an execute With on a row built without th
     Recorded = "drawn without error, With dropped, refresh fine",
     Target = "drawn without error, With dropped, refresh fine",
 })
+
+-- The search names a dropdown's button by its label (it shows », not its button text), and a With the row does not
+-- draw names nothing
+Scenario("B31c", "the search's names for a select option with an execute With, and with a range With", {
+    Observe = function()
+        local lib = LoadCopy()
+        local names = Internal(lib).Kinds.Option.Names
+        local modifier = Option("Modifier", { Type = "select" })
+        local go = Option("Go to Pop Out", { Type = "execute", GetButtonText = function() return "Open" end })
+        local scale = Option("Scale", { Type = "range" })
+        local _, withButton = names({ Option = modifier, With = go })
+        local _, withRange = names({ Option = modifier, With = scale })
+        return ("button: %s; range: %s"):format(tostring(withButton), tostring(withRange))
+    end,
+    Recorded = "button: Go to Pop Out; range: nil",
+    Target = "button: Go to Pop Out; range: nil",
+})

@@ -40,7 +40,7 @@ Each Lua file registers its own LibStub entry through LibMan, and LibStub keeps 
 | File | LibStub entry | Registration | Minor |
 |---|---|---|---|
 | `Krowi_Options.lua` | `Krowi_Options_2` | `KROWI_LIBMAN:NewLibrary('Krowi_Options_2', 0, {...})` | 0 |
-| `Kinds.lua` | `Krowi_Options_2_ElementKinds` | `KROWI_LIBMAN:NewSubmodule("ElementKinds", 0)`; not `"Kinds"`, because LibMan sets `lib[name]`, where it would read as the table of kinds (`lib.Internal.Kinds`) | 0 |
+| `Kinds.lua` | `Krowi_Options_2_ElementKinds` | `KROWI_LIBMAN:NewSubmodule("ElementKinds", 1)`; not `"Kinds"`, because LibMan sets `lib[name]`, where it would read as the table of kinds (`lib.Internal.Kinds`) | 1 (2.1) |
 | `Search.lua` | `Krowi_Options_2_SearchModule` | `KROWI_LIBMAN:NewSubmodule("SearchModule", 0)`; not `"Search"`, for the same reason (the search is `lib.Internal.Search`) | 0 |
 | `RowMixins.lua` | `Krowi_Options_2_RowMixins` | `KROWI_LIBMAN:NewSubmodule("RowMixins", 1)` | 1 (2.1) |
 | `RowFrames.lua` | `Krowi_Options_2_RowFrames` | `KROWI_LIBMAN:NewSubmodule("RowFrames", 1)` | 1 (2.1) |

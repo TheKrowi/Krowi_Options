@@ -31,8 +31,9 @@
 -- SettingsCheckboxSliderControlMixin); the row's name and changed line are the toggle's and With's together. A slider
 -- explains itself under the mouse; a button is the check box's, whose name says what it does (Krowi,
 -- docs/work/2026-11-02-options-widths). A select's element may carry With, an execute option, drawn 5 after the
--- dropdown's right arrow as a narrow button showing », which explains itself under the mouse (its GetButtonText is its
--- name) and greys out only by its own IsDisabled, not with the dropdown (2.1, docs/work/2026-11-09-select-with-button).
+-- dropdown's right arrow as a narrow button showing », which explains itself under the mouse (its GetLabel and
+-- GetDescription, as any option's; the search finds the row by its GetLabel, its GetButtonText is not shown) and greys
+-- out only by its own IsDisabled, not with the dropdown (2.1, docs/work/2026-11-09-select-with-button).
 -- A With on any other type is ignored.
 -- Every change goes through window:OnOptionChanged, which redraws the rows, their changed lines and the reload bar.
 -- Every text an option or element gives (labels, descriptions, values) is a plain string, never a secret value (12.x).
@@ -643,8 +644,10 @@ function OptionRowMixin:OnEnter(control)
         self.Window:OnRowEnter(self.With, self, self.Range:GetLeft() - self:GetLeft())
         return
     end
+    -- The dropdown's button explains itself, its hover help placed at the control column as the dropdown's is (at the
+    -- button itself it would open past the window's edge with the pane collapsed)
     if control ~= nil and control == self.Go and IsSelectButton(self) then
-        self.Window:OnRowEnter(self.With, self, self.Go:GetLeft() - self:GetLeft())
+        self.Window:OnRowEnter(self.With, self, self.Geometry and lib.Internal.RowX(self.Geometry.Select, self:GetWidth()))
         return
     end
     local optionType = self.Geometry and self.Option and optionTypes[self.Option.Type]
