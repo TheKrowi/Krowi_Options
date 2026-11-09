@@ -7,7 +7,7 @@
 
 -- The rows of the options page. A section's elements (config.GetElements, Krowi_Options.lua), each a table with Kind:
 --   Header, SubHeading, Note  { Text }: a heading, a smaller heading, a line of text
---   Option     { Option, With }: an option row (the interface below); With only on a toggle
+--   Option     { Option, With }: an option row (the interface below); With only on a toggle or a select
 --   Sub        { Text, Members }: a family heading with All / None, which set its member options
 --   Grid       { Columns, Rows = { { Label, Cells } } }: column titles, then a row of check boxes (options) per line
 --   TabList    { Items = { { Position, Show, Name, Source, MoveUp, MoveDown } } }: a tab's place, its Show option (none:
@@ -30,7 +30,10 @@
 -- with a button or a slider (Blizzard_SettingControls.lua, SettingsCheckboxWithButtonControlMixin and
 -- SettingsCheckboxSliderControlMixin); the row's name and changed line are the toggle's and With's together. A slider
 -- explains itself under the mouse; a button is the check box's, whose name says what it does (Krowi,
--- docs/work/2026-11-02-options-widths).
+-- docs/work/2026-11-02-options-widths). A select's element may carry With, an execute option, drawn 5 after the
+-- dropdown's right arrow as a narrow button showing », which explains itself under the mouse (its GetButtonText is its
+-- name) and greys out only by its own IsDisabled, not with the dropdown (2.1, docs/work/2026-11-09-select-with-button).
+-- A With on any other type is ignored.
 -- Every change goes through window:OnOptionChanged, which redraws the rows, their changed lines and the reload bar.
 -- Every text an option or element gives (labels, descriptions, values) is a plain string, never a secret value (12.x).
 -- A key option's Slots[n]:Set(key) runs from the key row: an addon's Set that writes bindings (SetBinding, SaveBindings)
@@ -44,7 +47,7 @@
 
 -- A standalone install loaded before any Krowi addon has no KROWI_LIBMAN and nothing to serve (Krowi_Options.lua)
 if not KROWI_LIBMAN then return end
-local sub, lib = KROWI_LIBMAN:NewSubmodule("RowMixins", 0)
+local sub, lib = KROWI_LIBMAN:NewSubmodule("RowMixins", 1)
 if not sub then return end
 
 -- What is not the public surface lives under lib.Internal (Krowi_Options.lua)
@@ -162,9 +165,16 @@ local function Changed(row)
     return row.Option:IsChanged() or row.With ~= nil and row.With:IsChanged()
 end
 
--- The control that draws With, the option after the check box
+-- Whether the row's With is a dropdown's button (a select's execute), drawn by row.Go
+local function IsSelectButton(row)
+    return row.With ~= nil and row.Option ~= nil and row.Option.Type == "select"
+end
+
+-- The control that draws With: after the check box, or the dropdown's button
 local function WithControl(row)
-    return row.With and (row.With.Type == "range" and row.Range or row.Execute)
+    if not row.With then return nil end
+    if IsSelectButton(row) then return row.Go end
+    return row.With.Type == "range" and row.Range or row.Execute
 end
 
 -- What an input box shows of its option's value: a string as it is, a number as text, a saved value of another type as
@@ -226,6 +236,17 @@ function OptionRowMixin:OnLoad()
         option:Set()
         self.Window:OnOptionChanged(option)
     end)
+
+    -- A row an older RowFrames.lua built has no dropdown button (two copies, CLAUDE.md)
+    if self.Go then
+        self.Go:SetScript("OnClick", function()
+            local with = self.With
+            if not with then return end
+            with:Set()
+            self.Window:OnOptionChanged(with)
+        end)
+        Forward(self.Go, self)
+    end
 
     -- Enter and Escape end the typing themselves, so the focus the box loses then saves nothing: Enter saved the text,
     -- Escape put the saved one back. The flag holds until that focus lost, or until the box is focused again when Enter
@@ -485,11 +506,21 @@ function OptionRowMixin:Init(element, window)
     for _, control in ipairs({ self.Toggle, self.Range, self.Select, self.Execute, self.Input, self.Key1, self.Key2 }) do
         control:Hide()
     end
+    if self.Go then self.Go:Hide() end
     self.InputKept, self.InputStart, self.Repaired = false, false, false
     self.Element, self.Window, self.Option = element, window, element.Option
     local option = self.Option
-    -- With only on a toggle (the contract): a slider's or a button's own control always sets its own option
-    self.With = option.Type == "toggle" and element.With and not element.With:IsHidden() and element.With or nil
+    -- With only on a toggle, or an execute on a select where the row has its button (the contract): a slider's or a
+    -- button's own control always sets its own option
+    local with = element.With
+    if with and with:IsHidden() then with = nil end
+    if option.Type == "toggle" then
+        self.With = with
+    elseif option.Type == "select" and with and with.Type == "execute" and self.Go then
+        self.With = with
+    else
+        self.With = nil
+    end
     local geometry = lib.Internal.RowGeometry(option.Indent)
     self.Geometry = geometry
     self.Label:ClearAllPoints()
@@ -503,8 +534,13 @@ function OptionRowMixin:Init(element, window)
 
     local optionType = optionTypes[option.Type]
     if optionType then optionType.Init(self, option, window) end
-    local with, control = self.With, WithControl(self)
-    if with then
+    local control
+    with, control = self.With, WithControl(self)
+    if with and IsSelectButton(self) then
+        control:ClearAllPoints()
+        control:SetPoint("LEFT", self.Select.IncrementButton, "RIGHT", 5, 0)
+        control:Show()
+    elseif with then
         control:ClearAllPoints()
         control:SetPoint("LEFT", self.Toggle, "RIGHT", 5, 0)
         if with.Type == "range" then
@@ -544,8 +580,11 @@ function OptionRowMixin:Refresh()
     self.ChangedBar:SetShown(changed)
     self.Reset:SetShown(changed and UnderMouse(self)) -- a change made under the mouse shows the arrow at once
 
-    -- With greys out with the toggle, or by itself (a threshold while its check box is off)
-    if with then
+    -- A dropdown's button greys out only by itself (the way to a switched-off feature stays open); a check box's With
+    -- greys out with the toggle, or by itself (a threshold while its check box is off)
+    if with and IsSelectButton(self) then
+        self.Go:SetEnabled(not with:IsDisabled())
+    elseif with then
         local withDisabled = disabled or with:IsDisabled()
         if with.Type == "range" then
             RefreshRange(self, with, withDisabled)
@@ -602,6 +641,10 @@ function OptionRowMixin:OnEnter(control)
     local onSlider = type(control) == "table" and (control == self.Range or control:GetParent() == self.Range)
     if onSlider and self.With and self.With.Type == "range" then
         self.Window:OnRowEnter(self.With, self, self.Range:GetLeft() - self:GetLeft())
+        return
+    end
+    if control ~= nil and control == self.Go and IsSelectButton(self) then
+        self.Window:OnRowEnter(self.With, self, self.Go:GetLeft() - self:GetLeft())
         return
     end
     local optionType = self.Geometry and self.Option and optionTypes[self.Option.Type]

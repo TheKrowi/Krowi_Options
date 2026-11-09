@@ -1125,6 +1125,24 @@ Scenario("B31", "a select option with an execute With: a button after the dropdo
         return ("a button %s the dropdown, %s, %s, a click runs %s"):format(after and "after" or "not after",
             shown and "shown" or "hidden", enabled and "enabled" or "greyed", #set > 0 and table.concat(set, ", ") or "nothing")
     end,
-    Recorded = "nothing beside the dropdown",
+    Recorded = "a button after the dropdown, shown, enabled, a click runs Go to Pop Out",
     Target = "a button after the dropdown, shown, enabled, a click runs Go to Pop Out",
+})
+
+-- Two copies: a newer RowMixins.lua on a row an older RowFrames.lua built, which has no dropdown button (a real frame
+-- reads the missing field as nil; the recorder would make one, so it is set false here)
+Scenario("B31b", "a select option with an execute With on a row built without the dropdown button", {
+    Observe = function()
+        local lib = LoadCopy()
+        local row = OptionRow(lib)
+        rawset(row, "Go", false)
+        local modifier = Option("Modifier", { Type = "select", GetValues = function() return { { 1, "Shift" } } end, Get = function() return 1 end })
+        local go = Option("Go to Pop Out", { Type = "execute", GetButtonText = function() return "Go to Pop Out" end, Set = Noop })
+        local ok, err = pcall(row.Init, row, { Kind = "Option", Option = modifier, With = go }, RowWindow(lib, { OnOptionChanged = Noop, Strings = {} }))
+        if not ok then return "error: " .. tostring(err) end
+        local refreshed = pcall(row.Refresh, row)
+        return ("drawn without error, With %s, refresh %s"):format(row.With and "kept" or "dropped", refreshed and "fine" or "errors")
+    end,
+    Recorded = "drawn without error, With dropped, refresh fine",
+    Target = "drawn without error, With dropped, refresh fine",
 })

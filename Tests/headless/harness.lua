@@ -111,16 +111,20 @@ function h.Fresh()
     for _, file in ipairs(utilFiles) do Run(Read(UTIL .. file), file) end
 end
 
--- A copy of the library as an addon embeds it. minors: { [file] = n } raises that file's minor from 0, as a newer copy
--- has it; edits: { [file] = function(source) return source end }
+-- A copy of the library as an addon embeds it. minors: { [file] = n } raises that file's minor by n above the one it
+-- has, as a newer copy has it (from 2.1 on a file's own minor need not be 0); edits: { [file] = function(source) return
+-- source end }
 function h.LoadCopy(minors, edits)
     minors, edits = minors or {}, edits or {}
     for _, file in ipairs(h.libraryFiles) do
         local source = Read(h.root .. file)
         if minors[file] then
             local count
-            source, count = source:gsub("(NewLibrary%('Krowi_Options_2', )0", "%1" .. minors[file])
-            if count == 0 then source, count = source:gsub('(NewSubmodule%("%w+", )0%)', "%1" .. minors[file] .. ")") end
+            local function Raise(head, minor) return head .. (tonumber(minor) + minors[file]) end
+            source, count = source:gsub("(NewLibrary%('Krowi_Options_2', )(%d+)", Raise)
+            if count == 0 then
+                source, count = source:gsub('(NewSubmodule%("%w+", )(%d+)%)', function(head, minor) return Raise(head, minor) .. ")" end)
+            end
             assert(count == 1, "no minor in " .. file)
         end
         if edits[file] then source = edits[file](source) end

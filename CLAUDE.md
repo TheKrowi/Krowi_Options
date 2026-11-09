@@ -35,15 +35,15 @@ A second embedded copy must load without a warning and must not mix its code wit
 
 ## Versioning
 
-Each Lua file registers its own LibStub entry through LibMan, and LibStub keeps the highest minor of each entry separately. Bump the minor of every file you change, in that file, from the first release on: nothing of `Krowi_Options_2` has shipped yet (KAF 105.0 waits for 2.0), so every file is at minor 0 and stays there until 2.0 is released.
+Each Lua file registers its own LibStub entry through LibMan, and LibStub keeps the highest minor of each entry separately. Bump the minor of every file you change, in that file: 2.0 shipped every file at minor 0 (2026-11-07), and a file changed since carries the version that changed it in the table.
 
 | File | LibStub entry | Registration | Minor |
 |---|---|---|---|
 | `Krowi_Options.lua` | `Krowi_Options_2` | `KROWI_LIBMAN:NewLibrary('Krowi_Options_2', 0, {...})` | 0 |
 | `Kinds.lua` | `Krowi_Options_2_ElementKinds` | `KROWI_LIBMAN:NewSubmodule("ElementKinds", 0)`; not `"Kinds"`, because LibMan sets `lib[name]`, where it would read as the table of kinds (`lib.Internal.Kinds`) | 0 |
 | `Search.lua` | `Krowi_Options_2_SearchModule` | `KROWI_LIBMAN:NewSubmodule("SearchModule", 0)`; not `"Search"`, for the same reason (the search is `lib.Internal.Search`) | 0 |
-| `RowMixins.lua` | `Krowi_Options_2_RowMixins` | `KROWI_LIBMAN:NewSubmodule("RowMixins", 0)` | 0 |
-| `RowFrames.lua` | `Krowi_Options_2_RowFrames` | `KROWI_LIBMAN:NewSubmodule("RowFrames", 0)` | 0 |
+| `RowMixins.lua` | `Krowi_Options_2_RowMixins` | `KROWI_LIBMAN:NewSubmodule("RowMixins", 1)` | 1 (2.1) |
+| `RowFrames.lua` | `Krowi_Options_2_RowFrames` | `KROWI_LIBMAN:NewSubmodule("RowFrames", 1)` | 1 (2.1) |
 | `WindowMixin.lua` | `Krowi_Options_2_WindowMixin` | `KROWI_LIBMAN:NewSubmodule("WindowMixin", 0)` | 0 |
 | `WindowHelp.lua` | `Krowi_Options_2_WindowHelp` | `KROWI_LIBMAN:NewSubmodule("WindowHelp", 0)` | 0 |
 | `WindowSearch.lua` | `Krowi_Options_2_WindowSearch` | `KROWI_LIBMAN:NewSubmodule("WindowSearch", 0)` | 0 |
@@ -55,7 +55,7 @@ Each Lua file registers its own LibStub entry through LibMan, and LibStub keeps 
 - **Shared tables on `lib` are added to, never replaced.** `lib.Internal` and each table in it (`Tabs`, `Mixins` and every mixin in it, `Build`, `Kinds`, `Geometry`) is made as `X = X or {}` and then filled: a newer copy of a file loaded second would otherwise empty a table an older copy of another file filled, and with the window's methods spread over five files, a file at an equal minor never runs again to fill it back. `Krowi_Options.lua` makes `lib.Internal`, and every file that writes into it makes it the same way at its top. Only `Kinds.lua` writes the entries of `lib.Internal.Kinds` and `lib.Internal.Geometry`, each whole. The core makes `lib.Internal.Mixins`, `Build` and `Tabs`, and the other files write into them without making them again, so a core from before `lib.Internal` existed does not mix with these files: they raise "attempt to index a nil value" when they load (nothing of `Krowi_Options_2` has shipped in the old layout; a consumer embedding the pre-split copy is deployed current with `Deploy-TestAddon.ps1 -Consumers` before a test, and every consumer embeds the same copy at release).
 - **A released file is never deleted or renamed**, only stubbed: it stays, with its registration at a raised minor and nothing else, so an older copy's file of that name cannot win and run.
 - **Moving a method or function between files raises both files' minors**, the file it leaves and the file it joins, so in a mix of copies both come from the newest copy and the method is defined exactly once.
-- These rules hold from the first release on. Nothing has shipped: the split of `WindowMixin.lua` into five files, `Kinds.lua` and `lib.Internal` (2026-11-06) are 2.0's file set at minor 0, with no stubs.
+- These rules hold since 2.0: the split of `WindowMixin.lua` into five files, `Kinds.lua` and `lib.Internal` (2026-11-06) are 2.0's file set at minor 0, with no stubs.
 - The locale files register nothing: every copy adds its phrases (`NewDefaultLocale(true)`, `NewLocale(lang, true)`), so a newer copy's code finds the phrases it added. Where two copies have the same phrase, AceLocale keeps the first-loaded copy's English and the last-loaded copy's translation, whichever copy is newer (known debt below).
 - `## Version:` in the TOC is the release version and must match the top changelog entry; it is unrelated to the minors. A breaking API change needs a new major name (`Krowi_Options_3`), as 2.0 did for `Krowi_Options_1`.
 
