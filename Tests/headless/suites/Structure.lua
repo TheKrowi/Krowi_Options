@@ -492,7 +492,7 @@ Option:debug.trace|Trace calls
 Option:debug.logFile|Log file
 Header:Priority
 Option:debug.tabPriority|Tab priority
-Option:debug.priorityOrder|Priority order
+Option:debug.priorityOrder|Priority order+debug.goKeys
 Header:Profiles
 Option:debug.profile|Profile
 Option:debug.resetAll|Reset everything]]
