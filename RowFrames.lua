@@ -255,10 +255,12 @@ function build.OptionRow(parent)
     row.Execute = CreateFrame("Button", nil, row, "UIPanelButtonNoTooltipTemplate")
     row.Execute:SetSize(200, 22)
     row.Execute:Hide()
-    -- A dropdown's button (a select's With): the same red button, narrow, with the » of the help pane's "How it works"
-    -- strip (WindowLayout.lua); its option's name says what it does under the mouse (docs/work/2026-11-09-select-with-button)
+    -- A dropdown's button (a select's With): the same red button, the size of the dropdown's arrow beside it (the visible
+    -- square of its atlas common-dropdown-c-button, grey border included: 29 x 28 of 39 x 39, measured in game; Krowi,
+    -- 2026-11-09), with the » of the help pane's "How it works" strip (WindowLayout.lua); its option's name says what it
+    -- does under the mouse (docs/work/2026-11-09-select-with-button)
     row.Go = CreateFrame("Button", nil, row, "UIPanelButtonNoTooltipTemplate")
-    row.Go:SetSize(32, 22)
+    row.Go:SetSize(29, 28)
     row.Go:SetText("\194\187")
     row.Go:Hide()
     row.Input = CreateFrame("EditBox", nil, row, "InputBoxTemplate")

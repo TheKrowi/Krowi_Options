@@ -201,7 +201,7 @@ local function Remember(option)
 end
 
 -- The game's control widths (docs/work/2026-11-02-options-widths), by the row's key; the dropdown's is inside Select
-local controlWidths = { Toggle = 30, Range = 250, Execute = 200, Key1 = 160, Key2 = 160, Go = 32 }
+local controlWidths = { Toggle = 30, Range = 250, Execute = 200, Key1 = 160, Key2 = 160, Go = 29 }
 local rowControlKeys = { "Toggle", "Range", "Execute", "Go", "Input", "Key1", "Key2", "All", "None", "Up", "Down" }
 
 -- How far a name's text reaches, whatever its anchors: a sub row's text spans the row
@@ -719,6 +719,10 @@ local function HelpFollowsStep(optionId)
         Needs = "toggle-shown",
         Text = "the help pane follows a change made under the mouse",
         Run = function()
+            -- The pane is read: open it, as a player's saved window state may have it collapsed (the restore step puts
+            -- it back)
+            local frame = Window()
+            if frame.PaneCollapsed then frame:SetPaneCollapsed(false) end
             local _, option = FindOption(optionId)
             local row = option and RowOf(option)
             if not row then
@@ -751,7 +755,9 @@ local function GridHelpFollowsStep()
         Name = "toggle-help-follows-grid",
         Text = "the help pane follows a change in a grid made under the mouse",
         Run = function()
-            Window():ShowSection("events")
+            local frame = Window()
+            if frame.PaneCollapsed then frame:SetPaneCollapsed(false) end -- the pane is read, as in toggle-help-follows
+            frame:ShowSection("events")
             local row, column
             ForEachRow(function(candidate)
                 local element = candidate.Element
@@ -2601,6 +2607,10 @@ local function SelectButtonStep()
             local ran = (seen.Button.Runs or 0) - before
             Add(ran == 1 and frame.SectionId == "keys" and "PASS" or "FAIL", ("4 a click ran it %d time(s) (1 expected) and shows %s (keys expected)"):format(
                 ran, tostring(frame.SectionId)))
+            -- Tab priority on again, so the steps after this one (search-change clicks it) start from the value before
+            local greyer = fixtures.Options[selectButtonGreyerId]
+            greyer:Set(live.Before[greyer].Value)
+            frame:OnOptionChanged(greyer)
         end
     }
 end
