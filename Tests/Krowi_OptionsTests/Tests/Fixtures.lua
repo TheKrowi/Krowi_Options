@@ -74,10 +74,11 @@ function option:Get()
     return values[self.Id]
 end
 
--- An execute option's Set runs it: it counts its runs
+-- An execute option's Set runs it: it counts its runs, and runs OnRun where it has one
 function option:Set(value)
     if self.Type == "execute" then
         self.Runs = (self.Runs or 0) + 1
+        if self.OnRun then self.OnRun() end
         return
     end
     values[self.Id] = value
@@ -220,6 +221,9 @@ local tabPriority = Toggle("debug.tabPriority", "Tab priority", true, { Descript
 local priorityOrder = New{ Id = "debug.priorityOrder", Type = "select", Label = "Priority order", Default = "first", Indent = 1, Parent = tabPriority,
     Values = { { "first", "First tab first" }, { "last", "Last tab first" } }, DisabledIf = function() return not tabPriority:Get() end,
     Description = "Which end of the list wins." }
+-- The dropdown's button (a select's With, 2.1): it opens Key bindings and stays enabled while the dropdown is greyed
+local goKeys = New{ Id = "debug.goKeys", Type = "execute", Label = "Go to Key bindings", ButtonText = "Open",
+    Description = "Opens the Key bindings section.", OnRun = function() fixtures.Tab:Open("keys") end }
 local profile = New{ Id = "debug.profile", Type = "select", Label = "Profile", Default = "default", Placeholder = "Pick a profile",
     Values = { { "default", "Default" }, { "alternate", "Alternate" } }, Description = "The set of settings in use.",
     Confirm = function(self, value) return ("Switch to the %s profile?"):format(self:FormatValue(value)) end }
@@ -393,7 +397,7 @@ end
 function builders.debug()
     return {
         Header("Output"), Row(verbose), Row(trace), Row(logFile),
-        Header("Priority"), Row(tabPriority), Row(priorityOrder),
+        Header("Priority"), Row(tabPriority), Row(priorityOrder, goKeys),
         Header("Profiles"), Row(profile), Row(resetAll),
     }
 end

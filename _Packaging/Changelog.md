@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## 2.1
+### Added
+- A dropdown row can carry a button: an execute option as the dropdown's `With`, drawn after the dropdown's right arrow as a button of the arrow's size showing ». Under the mouse it explains itself as the rest of the row does, and it greys out only by its own option, not with the dropdown
+
 ## 2.0 - 2026-11-07
 ### Changed
 - Registers as `Krowi_Options_2` (was `Krowi_Options_1`), since the points below change the API

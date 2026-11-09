@@ -201,8 +201,8 @@ local function Remember(option)
 end
 
 -- The game's control widths (docs/work/2026-11-02-options-widths), by the row's key; the dropdown's is inside Select
-local controlWidths = { Toggle = 30, Range = 250, Execute = 200, Key1 = 160, Key2 = 160 }
-local rowControlKeys = { "Toggle", "Range", "Execute", "Input", "Key1", "Key2", "All", "None", "Up", "Down" }
+local controlWidths = { Toggle = 30, Range = 250, Execute = 200, Key1 = 160, Key2 = 160, Go = 29 }
+local rowControlKeys = { "Toggle", "Range", "Execute", "Go", "Input", "Key1", "Key2", "All", "None", "Up", "Down" }
 
 -- How far a name's text reaches, whatever its anchors: a sub row's text spans the row
 local function NameEnd(name)
@@ -224,9 +224,15 @@ local function RowLayout(row)
             tinsert(wrong, ("arrow %g from the check boxes' line"):format(row.Select.DecrementButton:GetLeft() - line))
         end
     end
-    -- The option after a check box 5 after it, as the game's Tutorials and Mouse Sensitivity rows
-    local withControl = row.With and (row.With.Type == "range" and row.Range or row.Execute)
-    if withControl and withControl:IsShown() and math.abs(withControl:GetLeft() - row.Toggle:GetRight() - 5) > 0.5 then
+    -- The option after a check box 5 after it, as the game's Tutorials and Mouse Sensitivity rows; a dropdown's button 5
+    -- after its right arrow (2.1)
+    local onSelect = row.With and row.Option and row.Option.Type == "select"
+    local withControl = row.With and (onSelect and row.Go or row.With.Type == "range" and row.Range or row.Execute)
+    if onSelect and withControl and withControl:IsShown() then
+        if math.abs(withControl:GetLeft() - row.Select.IncrementButton:GetRight() - 5) > 0.5 then
+            tinsert(wrong, ("button %g after the dropdown"):format(withControl:GetLeft() - row.Select.IncrementButton:GetRight()))
+        end
+    elseif withControl and withControl:IsShown() and math.abs(withControl:GetLeft() - row.Toggle:GetRight() - 5) > 0.5 then
         tinsert(wrong, ("%s %g after its check box"):format(row.With.Type, withControl:GetLeft() - row.Toggle:GetRight()))
     end
     local function Control(key, control, width)
@@ -713,6 +719,10 @@ local function HelpFollowsStep(optionId)
         Needs = "toggle-shown",
         Text = "the help pane follows a change made under the mouse",
         Run = function()
+            -- The pane is read: open it, as a player's saved window state may have it collapsed (the restore step puts
+            -- it back)
+            local frame = Window()
+            if frame.PaneCollapsed then frame:SetPaneCollapsed(false) end
             local _, option = FindOption(optionId)
             local row = option and RowOf(option)
             if not row then
@@ -745,7 +755,9 @@ local function GridHelpFollowsStep()
         Name = "toggle-help-follows-grid",
         Text = "the help pane follows a change in a grid made under the mouse",
         Run = function()
-            Window():ShowSection("events")
+            local frame = Window()
+            if frame.PaneCollapsed then frame:SetPaneCollapsed(false) end -- the pane is read, as in toggle-help-follows
+            frame:ShowSection("events")
             local row, column
             ForEachRow(function(candidate)
                 local element = candidate.Element
@@ -2545,6 +2557,64 @@ local function ExecuteStep()
     }
 end
 
+-- A dropdown's button (2.1, docs/work/2026-11-09-select-with-button): Debug's Priority order carries Go to Key bindings.
+-- Its check box Tab priority is put off first, so the dropdown is greyed; the screenshot shows the row so. Then: the
+-- button stands 5 after the dropdown's right arrow and inside the row, shows », stays enabled, its hover explains the
+-- button and not the dropdown, and a click runs it once and opens Key bindings.
+local selectButtonOwnerId, selectButtonId, selectButtonGreyerId = "debug.priorityOrder", "debug.goKeys", "debug.tabPriority"
+
+local function SelectButtonStep()
+    local seen
+    return {
+        Name = "select-button",
+        Text = "a dropdown's button stands after it, stays enabled while the dropdown is greyed, explains itself and runs",
+        Run = function()
+            local frame = Window()
+            local section, owner = FindOption(selectButtonOwnerId)
+            local button, greyer = fixtures.Options[selectButtonId], fixtures.Options[selectButtonGreyerId]
+            seen = { Owner = owner, Button = button }
+            if not (section and button and greyer) then return end
+            Remember(greyer)
+            greyer:Set(false)
+            if frame.PaneCollapsed then frame:SetPaneCollapsed(false) end
+            frame:ShowSection(section, selectButtonOwnerId)
+        end,
+        Check = function()
+            local frame = Window()
+            local row = seen.Owner and RowOf(seen.Owner)
+            if not (row and seen.Button) then
+                Add("FAIL", ("%s's row is not drawn, or %s is missing"):format(selectButtonOwnerId, selectButtonId))
+                return
+            end
+            local go = row.Go
+            if not go or not go:IsShown() then
+                Add("FAIL", "1 no button after the dropdown")
+                return
+            end
+            local gap = go:GetLeft() - row.Select.IncrementButton:GetRight()
+            local inside = go:GetRight() <= row:GetRight() + 0.5
+            Add(math.abs(gap - 5) < 0.6 and inside and "PASS" or "FAIL", ("1 the button stands %.1f after the right arrow (5 expected), %s the row"):format(
+                gap, inside and "inside" or "past the end of"))
+            local dropdownGreyed = not row.Select.Dropdown:IsEnabled()
+            Add(dropdownGreyed and go:IsEnabled() and go:GetText() == "\194\187" and "PASS" or "FAIL", ("2 the dropdown %s, the button %s, showing %s"):format(
+                dropdownGreyed and "greyed" or "enabled", go:IsEnabled() and "enabled" or "greyed", tostring(go:GetText())))
+            row:OnEnter(go)
+            local shown = frame.HoverOption
+            row:OnLeave()
+            Add(shown == seen.Button and "PASS" or "FAIL", ("3 over the button the help explains %s"):format(shown and shown:GetLabel() or "the section"))
+            local before = seen.Button.Runs or 0
+            go:Click()
+            local ran = (seen.Button.Runs or 0) - before
+            Add(ran == 1 and frame.SectionId == "keys" and "PASS" or "FAIL", ("4 a click ran it %d time(s) (1 expected) and shows %s (keys expected)"):format(
+                ran, tostring(frame.SectionId)))
+            -- Tab priority on again, so the steps after this one (search-change clicks it) start from the value before
+            local greyer = fixtures.Options[selectButtonGreyerId]
+            greyer:Set(live.Before[greyer].Value)
+            frame:OnOptionChanged(greyer)
+        end
+    }
+end
+
 -- A family's All / None (spec requirement 6): Events' Seasons heading, its buttons clicked through Click(). Each sets
 -- every member that is not greyed and redraws through OnOptionChanged (RowMixins.lua, SubRowMixin); then each member is
 -- read: its saved value, its check box, its changed line, and the footer's count.
@@ -2921,6 +2991,7 @@ local function BuildSteps()
     tinsert(list, CombatStep())
     tinsert(list, DefaultsStep())
     tinsert(list, ExecuteStep())
+    tinsert(list, SelectButtonStep())
     tinsert(list, AllNoneStep())
     tinsert(list, TabArrowsStep())
     tinsert(list, ResizeStep())

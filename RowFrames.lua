@@ -13,7 +13,7 @@
 
 -- A standalone install loaded before any Krowi addon has no KROWI_LIBMAN and nothing to serve (Krowi_Options.lua)
 if not KROWI_LIBMAN then return end
-local sub, lib = KROWI_LIBMAN:NewSubmodule("RowFrames", 0)
+local sub, lib = KROWI_LIBMAN:NewSubmodule("RowFrames", 1)
 if not sub then return end
 
 -- What is not the public surface lives under lib.Internal (Krowi_Options.lua)
@@ -255,6 +255,14 @@ function build.OptionRow(parent)
     row.Execute = CreateFrame("Button", nil, row, "UIPanelButtonNoTooltipTemplate")
     row.Execute:SetSize(200, 22)
     row.Execute:Hide()
+    -- A dropdown's button (a select's With): the same red button, the size of the dropdown's arrow beside it (the visible
+    -- square of its atlas common-dropdown-c-button, grey border included: 29 x 28 of 39 x 39, measured in game; Krowi,
+    -- 2026-11-09), with the » of the help pane's "How it works" strip (WindowLayout.lua); its option's name says what it
+    -- does under the mouse (docs/work/2026-11-09-select-with-button)
+    row.Go = CreateFrame("Button", nil, row, "UIPanelButtonNoTooltipTemplate")
+    row.Go:SetSize(29, 28)
+    row.Go:SetText("\194\187")
+    row.Go:Hide()
     row.Input = CreateFrame("EditBox", nil, row, "InputBoxTemplate")
     row.Input:SetAutoFocus(false)
     row.Input:SetSize(240, 20)

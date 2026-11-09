@@ -30,7 +30,7 @@
 if not KROWI_LIBMAN then return end
 -- Not "Kinds": LibMan hangs the submodule on lib under its name, where it would read as the table of kinds below
 -- (lib.Internal.Kinds)
-local sub, lib = KROWI_LIBMAN:NewSubmodule("ElementKinds", 0)
+local sub, lib = KROWI_LIBMAN:NewSubmodule("ElementKinds", 1)
 if not sub then return end
 
 -- What is not the public surface lives under lib.Internal (Krowi_Options.lua)
@@ -70,19 +70,30 @@ kinds.Note = { Build = "NoteRow", Height = function(window, element)
 end }
 
 -- [[ An option ]] --
+-- The With an option row draws (RowMixins.lua's Init): on a toggle any, on a select an execute, nothing else; never a
+-- hidden one
+local function DrawnWith(element)
+    local with, optionType = element.With, element.Option.Type
+    if not with or with:IsHidden() then return nil end
+    if optionType == "toggle" or optionType == "select" and with.Type == "execute" then return with end
+    return nil
+end
+
 kinds.Option = {
     Build = "OptionRow",
     Height = 30,
     Hidden = function(element) return element.Option:IsHidden() end,
     -- Its name, and its check box's button text or slider name
+    -- A dropdown's button (a select's execute With, 2.1) shows » and is named by its label; a With the row does not draw
+    -- (on a select anything but an execute, on other types anything) adds nothing
     Names = function(element)
-        local with = element.With
-        local withName = with and not with:IsHidden() and (with.Type == "execute" and with:GetButtonText() or with:GetLabel()) or nil
+        local with = DrawnWith(element)
+        local withName = with and (with.Type == "execute" and element.Option.Type ~= "select" and with:GetButtonText() or with:GetLabel()) or nil
         return element.Option:GetLabel(), withName
     end,
     Descriptions = function(element)
-        local option, with = element.Option, element.With
-        local withDescription = with and not with:IsHidden() and with.GetDescription and with:GetDescription() or nil
+        local option, with = element.Option, DrawnWith(element)
+        local withDescription = with and with.GetDescription and with:GetDescription() or nil
         return option.GetDescription and option:GetDescription(), withDescription
     end,
     Options = function(element) return element.Option, element.With end,
