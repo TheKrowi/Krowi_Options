@@ -13,3 +13,4 @@ Class: library
 | 2026-11-09 | look | (unasked, from a screenshot of the 32 x 22 button) | - | "make the red button the same dimentions as the arrow button, then open retail for me on a test page and ping me to check ... make this a rule for visual things, let me verify visually, once the design is approved, run the full test suites" | correction |
 | 2026-11-09 | look | The button at the arrow's size, 29 x 28 (the visible square of its atlas, measured in game), in Retail's Keys and clicks | approve | "perfect, design approved" | took |
 | 2026-11-09 | design | The interrupted /kotest run: search-change failed on four clients, both help-follows steps on Retail | fix the test addon: select-button puts Tab priority back on after its check; the help-follows steps open a collapsed pane first, as the other pane-reading steps do (Retail's pane was collapsed in the window's saved state) | - | auto |
+| 2026-11-09 | merge | PR #15 | merge | "Merge" | took |
